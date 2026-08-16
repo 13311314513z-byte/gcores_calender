@@ -5,6 +5,9 @@ logs/
 *.db-wal
 *.db-shm
 
+# 离线 H5 导出产物（可随时 export-h5 重新生成）
+机核播客日历.html
+
 # Python
 __pycache__/
 *.pyc
