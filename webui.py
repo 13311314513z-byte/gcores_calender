@@ -15,8 +15,20 @@ import store
 from search import format_duration, search, suggest
 
 INDEX_HTML = Path(__file__).resolve().parent / "webui_index.html"
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 
 config.ensure_dirs()
+
+_CONTENT_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+    ".css": "text/css; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+}
 
 
 class CalendarServer(ThreadingHTTPServer):
@@ -100,6 +112,25 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             html = INDEX_HTML.read_text(encoding="utf-8") if INDEX_HTML.exists() else "<h1>index missing</h1>"
             self._send(200, html, "text/html; charset=utf-8")
+            return
+
+        if path.startswith("/assets/"):
+            name = path[len("/assets/"):]
+            if "/" in name or ".." in name:
+                self._send(404, {"error": "bad path"})
+                return
+            f = ASSETS_DIR / name
+            if not f.is_file():
+                self._send(404, {"error": "not found"})
+                return
+            data = f.read_bytes()
+            ctype = _CONTENT_TYPES.get(f.suffix.lower(), "application/octet-stream")
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "max-age=86400")
+            self.end_headers()
+            self.wfile.write(data)
             return
 
         if path == "/api/month":

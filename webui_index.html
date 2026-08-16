@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>机核播客日历</title>
+<link rel="icon" type="image/png" href="/assets/favicon-32.png">
 <script>
   // 主题在 CSS 生效前应用，避免闪烁；记忆用户选择，默认跟随系统
   try {
@@ -13,26 +14,34 @@
   } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
 </script>
 <style>
-  :root { --bg:#0f1115; --panel:#171a21; --panel2:#1f242e; --line:#2a3040;
-          --fg:#e8eaf0; --dim:#9aa3b2; --acc:#ffb13b; --paid:#ff6b6b; --free:#4ecdc4; }
-  /* 白天（浅色）主题 */
-  [data-theme="light"] {
-    --bg:#f2f4f8; --panel:#ffffff; --panel2:#e9edf4; --line:#d3d9e4;
-    --fg:#1b2230; --dim:#5f6b85; --acc:#b97c08; --paid:#d13b3b; --free:#0e9485;
+  /* 机核 GCORES 官方设计规范（提取自 static.gcores.com/assets/Main.css）：
+     品牌红 #ff3d1d / 品牌 #f83055 / GPASS 紫 #5e4bff / 高亮蓝 #478cfe / 付费金 #dbc1a1
+     主文本 #323232 / 次级 #5a5a5a / 弱文本 #aaa / 背景 #f7f7f8 / 暗色面 #141414 #1e1e20 #282828
+     字体 PingFangSC, Open Sans, Helvetica Neue, Arial, Hiragino Sans GB, Microsoft YaHei... */
+  :root {
+    --bg:#141414; --panel:#1e1e20; --panel2:#282828; --line:#323232;
+    --fg:#f2f2f2; --dim:#aaa; --acc:#ff3d1d; --brand:#f83055;
+    --gpass:#5e4bff; --gold:#dbc1a1; --paid:#f83055; --free:#20c997;
+    --font:"PingFangSC","Open Sans","Helvetica Neue",Arial,"Hiragino Sans GB","Microsoft YaHei","WenQuanYi Micro Hei",sans-serif;
   }
-  [data-theme="light"] header { background:#ffffffee; }
-  [data-theme="light"] .b-paid { background:#fde7e7; }
-  [data-theme="light"] .b-free { background:#e0f5f1; }
-  [data-theme="light"] .btn-accent { background:#f8e9c6; border-color:#c98a12; color:#8a5a10; }
-  [data-theme="light"] .btn-accent:hover { background:#f2dcab; }
-  [data-theme="light"] #statsModal { background:rgba(24,32,50,.4); }
+  /* 白天（浅色）主题 - 机核浅色灰阶 */
+  [data-theme="light"] {
+    --bg:#f7f7f8; --panel:#ffffff; --panel2:#f6f6f6; --line:#e6e6e6;
+    --fg:#323232; --dim:#5a5a5a; --acc:#ff3d1d; --brand:#f83055;
+    --gpass:#5e4bff; --gold:#8a6d2f; --paid:#e0242f; --free:#198754;
+  }
+  [data-theme="light"] header { background:#fffffff2; }
+  [data-theme="light"] .btn-accent { background:var(--acc); border-color:var(--acc); color:#fff; }
+  [data-theme="light"] .btn-accent:hover { background:#e02f12; border-color:#e02f12; }
+  [data-theme="light"] #statsModal { background:rgba(20,20,20,.45); }
   [data-theme="light"] .jump-group input[type="date"] { color-scheme:light; }
-  [data-theme="light"] .bar-row .bbar i { background:linear-gradient(90deg,#d9a54a,var(--acc)); }
+  [data-theme="light"] .bar-row .bbar i { background:linear-gradient(90deg,#f83055,var(--acc)); }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:var(--bg); color:var(--fg); font:14px/1.6 "Microsoft YaHei",system-ui,sans-serif; }
-  header { position:sticky; top:0; z-index:10; background:#11141aee; backdrop-filter:blur(6px);
+  body { background:var(--bg); color:var(--fg); font:14px/1.6 var(--font); }
+  header { position:sticky; top:0; z-index:10; background:#141414ee; backdrop-filter:blur(6px);
            border-bottom:1px solid var(--line); padding:10px 18px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
-  header h1 { font-size:17px; color:var(--acc); white-space:nowrap; }
+  header h1 { font-size:17px; color:var(--brand); white-space:nowrap; display:flex; align-items:center; gap:8px; letter-spacing:.5px; }
+  .hd-logo { width:26px; height:26px; border-radius:6px; display:block; }
   #searchBox { flex:1; min-width:220px; position:relative; }
   #searchBox input { width:100%; background:var(--panel2); color:var(--fg); border:1px solid var(--line);
                      border-radius:8px; padding:8px 12px; font-size:14px; outline:none; }
@@ -44,8 +53,8 @@
   .btn { background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:8px;
          padding:8px 12px; cursor:pointer; font-size:13px; white-space:nowrap; }
   .btn:hover { border-color:var(--acc); color:var(--acc); }
-  .btn-accent { background:#3a2c12; border-color:var(--acc); color:var(--acc); }
-  .btn-accent:hover { background:#4a3a1a; }
+  .btn-accent { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .btn-accent:hover { background:#e02f12; border-color:#e02f12; color:#fff; }
   .chips { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   .jump-group { display:flex; gap:6px; align-items:center; }
   .jump-group input[type="date"] { background:var(--panel2); color:var(--fg); border:1px solid var(--line);
@@ -66,7 +75,7 @@
   .bar-row { display:flex; align-items:center; gap:8px; font-size:12px; margin:3px 0; }
   .bar-row .bname { width:110px; text-align:right; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .bar-row .bbar { flex:1; background:var(--panel2); border-radius:4px; height:12px; overflow:hidden; }
-  .bar-row .bbar i { display:block; height:100%; background:linear-gradient(90deg,#8a5a10,var(--acc)); }
+  .bar-row .bbar i { display:block; height:100%; background:linear-gradient(90deg,#f83055,var(--acc)); }
   .bar-row .bcnt { width:56px; color:var(--dim); }
   .meta-line { font-size:11px; color:var(--dim); margin:2px 0; }
   footer.foot { margin-top:26px; padding:14px 4px 20px; border-top:1px solid var(--line);
@@ -102,9 +111,10 @@
   .ep h3 { font-size:15px; }
   .ep h3 a { color:var(--fg); text-decoration:none; } .ep h3 a:hover { color:var(--acc); }
   .badge { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; margin-left:6px; vertical-align:2px; }
-  .b-paid { background:#3a1c1c; color:var(--paid); border:1px solid var(--paid); }
-  .b-free { background:#10271f; color:var(--free); border:1px solid var(--free); }
-  .b-cat { background:var(--panel); color:var(--dim); border:1px solid var(--line); }
+  /* 付费徽标：机核官方 btn-pay 配色（金字 + 深灰底） */
+  .b-paid { color:var(--gold); background:#323232; border:1px solid #474747; }
+  .b-free { color:#20c997; background:transparent; border:1px solid #20c997; }
+  .b-cat { background:transparent; color:var(--dim); border:1px solid var(--line); }
   .sub { color:var(--dim); font-size:13px; margin:2px 0 6px; }
   .meta { color:var(--dim); font-size:12px; margin-bottom:6px; }
   .djs { margin:6px 0; }
@@ -127,7 +137,7 @@
 </head>
 <body>
 <header>
-  <h1>📻 机核播客日历</h1>
+  <h1><img class="hd-logo" id="hdLogo" src="/assets/favicon-32.png" alt="gcores">机核播客日历</h1>
   <div id="searchBox">
     <input id="searchInput" placeholder="搜索标题 / 副标题 / 简介 / 分类 / 正文 / 参与者…" autocomplete="off">
     <div id="suggest"></div>

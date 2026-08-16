@@ -11,6 +11,19 @@
 
 ---
 
+## 1.1.0（2026-08-16）
+
+### UI 按机核官方设计规范重制
+- 抓取并分析机核官方样式表（static.gcores.com/assets/Main.css），提取设计 token：
+  品牌红 `#ff3d1d` / 品牌 `#f83055`、GPASS 紫 `#5e4bff`、高亮蓝 `#478cfe`、付费金 `#dbc1a1`
+  主文本 `#323232` / 次级 `#5a5a5a` / 弱文本 `#aaa`、浅色背景 `#f7f7f8`、暗色面 `#141414 / #1e1e20 / #282828`
+- 白天/夜间双主题色板全部替换为机核官方配色
+- 字体栈改用官方字体：`PingFangSC, Open Sans, Helvetica Neue, Arial, Hiragino Sans GB, Microsoft YaHei, WenQuanYi Micro Hei, sans-serif`
+- 引入官方图标：favicon（16/32px）与页头 logo（assets/ 目录），Web 版经 /assets 静态路由、离线 H5 内联 base64
+- 付费徽标采用官方 btn-pay 风格（金字 `#dbc1a1` + 深灰底 `#323232`）；"历史上的今天"按钮、分类条形图使用品牌红
+
+---
+
 ## 1.0.0（当前版本）
 
 首个完整基线版本，包含以下功能：

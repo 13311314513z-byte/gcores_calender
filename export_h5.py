@@ -3,6 +3,7 @@
 
 用法：py gcal.py export-h5 [--out 机核播客日历.html]
 """
+import base64
 import json
 import re
 import sys
@@ -254,7 +255,17 @@ def export_h5(db_path=None, out_path=None):
         raise RuntimeError("未找到主脚本位置")
     html = html[:last_script] + data_script + html[last_script:]
 
-    # 3) 标题注明离线快照
+    # 3) 官方图标内联（favicon + 页头 logo），保证离线单文件自包含
+    fav = BASE_DIR / "assets" / "favicon-32.png"
+    if fav.is_file():
+        b64 = base64.b64encode(fav.read_bytes()).decode("ascii")
+        uri = f"data:image/png;base64,{b64}"
+        html = html.replace('href="/assets/favicon-32.png"', f'href="{uri}"')
+        html = html.replace('src="/assets/favicon-32.png"', f'src="{uri}"')
+    else:
+        html = re.sub(r'<link rel="icon"[^>]*>', "", html)
+
+    # 4) 标题注明离线快照
     html = html.replace(
         "<title>机核播客日历</title>",
         "<title>机核播客日历（离线 H5）</title>")
