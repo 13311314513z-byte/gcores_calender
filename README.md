@@ -48,6 +48,12 @@ py gcal.py serve                    # 启动 Web 界面（默认 127.0.0.1:8333�
 - 每日 **12:00** 增量校验 + 每 6 小时轻量增量（`install_task.ps1` 一键安装，无需管理员）
 - 使用 pythonw 无窗口运行，日志写入 `logs/gcal.log`
 
+### 5. 离线 H5 单文件入口（可双击打开）
+- `py gcal.py export-h5` 生成**自包含的 `机核播客日历.html`**（内嵌全部索引快照：期数/评论/参与者/关键词）
+- **双击文件**即可在浏览器打开完整日历界面，**无需启动服务、无需联网**（数据为导出时刻的快照）
+- 与在线版同款界面：月历、历史上的今天、有声书下拉框、搜索与提示、统计弹窗、双主题
+- 数据更新后重新执行 `py gcal.py export-h5` 即可刷新快照
+
 ---
 
 ## 快速开始
@@ -85,6 +91,7 @@ py gcal.py categories               # 按分类补抓（付费期数完整数据
 py gcal.py comments                 # 精华评论前三（断点续抓）
 py gcal.py membership               # 节目归属补录（断点续抓）
 py gcal.py keywords                 # 重建关键词提示表
+py gcal.py export-h5                # 导出可双击打开的离线 H5 单文件（机核播客日历.html）
 py gcal.py --all day 04-23          # 包含非官方（机组用户）内容
 py gcal.py day 04-23 --audiobooks   # 包含机核有声书
 ```
@@ -141,6 +148,8 @@ gcores_calendar/
 ├── calendar_view.py   # 日历/日/月查询 + 卡片装配 + 统计
 ├── webui.py           # Web 服务器（纯 http.server + JSON API）
 ├── webui_index.html   # 日历页面（月历/日详情/搜索/统计弹窗/双主题）
+├── export_h5.py       # 离线 H5 单文件导出器（内嵌快照数据层）
+├── 机核播客日历.html  # （生成物）可双击打开的离线入口
 ├── install_task.ps1   # Windows 计划任务安装（每日12:00 + 每6小时）
 ├── config.py / config.toml(可选)   # 配置（限速/范围/增量天数）
 ├── data/gcores_calendar.db         # 索引库（SQLite + FTS5）

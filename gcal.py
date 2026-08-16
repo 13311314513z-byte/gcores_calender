@@ -261,6 +261,11 @@ def cmd_stats(args):
     print(f"comments: {s['comments_done_at']}  最近增量: {s['last_incremental_at']}")
 
 
+def cmd_export_h5(args):
+    from export_h5 import export_h5
+    export_h5(db_path=args.db, out_path=args.out)
+
+
 def cmd_serve(args):
     from webui import run_server
     run_server(port=args.port, db=args.db, host=args.host)
@@ -339,6 +344,10 @@ def main(argv=None):
 
     sp = sub.add_parser("stats", help="索引统计")
     sp.set_defaults(fn=cmd_stats)
+
+    sp = sub.add_parser("export-h5", help="导出可双击打开的离线 H5 单文件")
+    sp.add_argument("--out", default=None, help="输出文件路径")
+    sp.set_defaults(fn=cmd_export_h5)
 
     sp = sub.add_parser("serve", help="启动本地 Web 界面")
     sp.add_argument("--port", type=int, default=8333)

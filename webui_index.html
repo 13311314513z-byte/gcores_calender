@@ -197,10 +197,12 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const clamp = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s);
 
+// ===DATA-LAYER-START===
 async function api(path) {
   const r = await fetch(path);
   return r.json();
 }
+// ===DATA-LAYER-END===
 
 // ---------- 统计 ----------
 async function loadStats() {
