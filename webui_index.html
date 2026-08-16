@@ -34,6 +34,7 @@
   [data-theme="light"] .btn-accent { background:var(--acc); border-color:var(--acc); color:#fff; }
   [data-theme="light"] .btn-accent:hover { background:#e02f12; border-color:#e02f12; }
   [data-theme="light"] #statsModal { background:rgba(20,20,20,.45); }
+  [data-theme="light"] #hotModal { background:rgba(20,20,20,.45); }
   [data-theme="light"] .jump-group input[type="date"] { color-scheme:light; }
   [data-theme="light"] .bar-row .bbar i { background:linear-gradient(90deg,#f83055,var(--acc)); }
   * { box-sizing:border-box; margin:0; padding:0; }
@@ -61,6 +62,8 @@
                                    border-radius:8px; padding:7px 8px; font-size:13px; color-scheme:dark; }
   #statsModal { display:none; position:fixed; inset:0; z-index:50; background:#000a; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; }
   #statsModal.open { display:flex; }
+  #hotModal { display:none; position:fixed; inset:0; z-index:50; background:#000a; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; }
+  #hotModal.open { display:flex; }
   .modal-card { background:var(--panel); border:1px solid var(--line); border-radius:12px; width:min(640px,100%);
                 padding:20px 24px; box-shadow:0 12px 40px #000c; }
   .modal-card h2 { font-size:16px; color:var(--acc); margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }

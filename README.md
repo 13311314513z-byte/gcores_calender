@@ -1,6 +1,6 @@
 # 机核播客日历（Gcores Podcast Calendar）
 
-> **当前版本：v1.4.0** ｜ 版本历史见 [CHANGELOG.md](CHANGELOG.md) ｜ 语义化版本规则：MAJOR 不兼容重构 / MINOR 新增功能 / PATCH 缺陷修复
+> **当前版本：v1.4.1** ｜ 版本历史见 [CHANGELOG.md](CHANGELOG.md) ｜ 语义化版本规则：MAJOR 不兼容重构 / MINOR 新增功能 / PATCH 缺陷修复
 
 本地索引 www.gcores.com 全部官方播客（含付费/会员节目元数据），生成按日期检索的日历：
 **"历史上的今天"、关键词检索与提示、参与者名单、每期高权重精华评论前三、封面头图、白天/夜间主题**。
@@ -8,7 +8,7 @@
 - **范围**：机核官方节目（`owner-type=gcores`）+ 分类全量期数（付费期数完整收录），付费期数以"付费"徽标标识
 - **内容**：仅公开元数据与公开评论文本，**不下载、不存储任何音频**
 - **依赖**：Python 3.11+ 标准库（urllib / sqlite3 / http.server / FTS5），**零第三方包**
-- **版本**：当前 **v1.4.0**（`py gcal.py --version`；Web 页脚与统计弹窗、离线 H5 页脚同步展示）。版本规则与历史见 [CHANGELOG.md](CHANGELOG.md)（语义化：MAJOR 重构 / MINOR 新功能 / PATCH 修复）
+- **版本**：当前 **v1.4.1**（`py gcal.py --version`；Web 页脚与统计弹窗、离线 H5 页脚同步展示）。版本规则与历史见 [CHANGELOG.md](CHANGELOG.md)（语义化：MAJOR 重构 / MINOR 新功能 / PATCH 修复）
 
 ---
 
