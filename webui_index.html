@@ -132,10 +132,7 @@
   </div>
   <div class="chips">
     <button class="btn btn-accent" id="btnToday">📅 历史上的今天</button>
-    <span class="jump-group">
-      <input type="date" id="jumpDate" title="选择日期">
-      <button class="btn" id="btnJump">查看该日</button>
-    </span>
+    <button class="btn" id="btnRefresh" title="立即增量抓取最新播客（新期数 + 评论/播放刷新）">⚡ 立即抓取最新</button>
     <button class="btn" id="btnStats">📊 统计</button>
     <button class="btn" id="btnTheme" title="切换白天/夜间主题">🌙 夜间</button>
   </div>
@@ -428,18 +425,45 @@ $("#btnTheme").onclick = () => {
 // ---------- 事件 ----------
 $("#btnToday").onclick = () => {
   const now = new Date();
-  $("#jumpDate").value = now.toISOString().slice(0, 10);
   curY = now.getFullYear(); curM = now.getMonth() + 1;
   renderMonth().then(() => openDay(String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0")));
 };
-$("#btnJump").onclick = () => {
-  const v = $("#jumpDate").value;
-  if (!v) { $("#jumpDate").value = new Date().toISOString().slice(0, 10); return; }
-  const [y, m, d] = v.split("-").map(Number);
-  curY = y; curM = m;
-  renderMonth().then(() => openDay(String(m).padStart(2,"0") + "-" + String(d).padStart(2,"0")));
+
+// ---------- 立即抓取最新 ----------
+$("#btnRefresh").onclick = async () => {
+  const btn = $("#btnRefresh");
+  if (window.__GCAL_DATA__) {           // 离线 H5 快照版无法在线抓取
+    alert("离线版无法在线抓取。请运行 py gcal.py export-h5 重新导出快照。");
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "⏳ 抓取中…";
+  try {
+    await fetch("/api/refresh", { method: "POST" });
+    let done = false;
+    for (let i = 0; i < 150 && !done; i++) {   // 最多轮询 5 分钟
+      await new Promise(r => setTimeout(r, 2000));
+      const st = await api("/api/refresh-status");
+      if (st.running) continue;
+      done = true;
+      const L = st.last || {};
+      if (L.ok) {
+        btn.textContent = `✅ 新增${L.new_episodes}期 · ${L.seconds}s`;
+        await Promise.all([loadStats(), renderMonth()]);
+        if (curD) openDay(curD);
+      } else {
+        btn.textContent = "❌ 抓取失败";
+        console.error("refresh failed:", L.error);
+      }
+      setTimeout(() => { btn.textContent = "⚡ 立即抓取最新"; btn.disabled = false; }, 5000);
+    }
+    if (!done) { btn.textContent = "⚡ 立即抓取最新"; btn.disabled = false; }
+  } catch (e) {
+    console.error(e);
+    btn.textContent = "❌ 请求失败";
+    setTimeout(() => { btn.textContent = "⚡ 立即抓取最新"; btn.disabled = false; }, 3000);
+  }
 };
-$("#jumpDate").addEventListener("keydown", e => { if (e.key === "Enter") $("#btnJump").click(); });
 $("#btnStats").onclick = openStats;
 $("#statsClose").onclick = closeStats;
 $("#statsModal").addEventListener("click", e => { if (e.target.id === "statsModal") closeStats(); });
@@ -450,7 +474,6 @@ $("#nextM").onclick = () => { curM++; if (curM > 12) { curM = 1; curY++; } rende
 (async () => {
   const now = new Date();
   curY = now.getFullYear(); curM = now.getMonth() + 1;
-  $("#jumpDate").value = now.toISOString().slice(0, 10);
   syncThemeBtn();
   await Promise.all([loadStats(), renderMonth()]);
   openDay(String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0"));

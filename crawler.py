@@ -466,3 +466,4 @@ def incremental(client, conn):
     store._set_meta(conn, "last_incremental_at", now_iso())
     conn.commit()
     log.info("incremental done in %.1fs (%d new)", time.time() - t0, len(new_ids))
+    return len(new_ids)

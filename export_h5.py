@@ -206,6 +206,8 @@ async function api(path) {
     return {suggestions: out};
   }
   if (p.endsWith("/api/stats")) return __D.stats;
+  if (p.endsWith("/api/refresh") || p.endsWith("/api/refresh-status"))
+    return { running: false, last: null };   // 离线版不支持在线抓取
   return {};
 }
 """
