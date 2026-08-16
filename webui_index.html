@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>机核播客日历</title>
+<script>
+  // 主题在 CSS 生效前应用，避免闪烁；记忆用户选择，默认跟随系统
+  try {
+    var _t = localStorage.getItem("gcal-theme");
+    if (!_t) _t = window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", _t);
+  } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
+</script>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --panel2:#1f242e; --line:#2a3040;
+          --fg:#e8eaf0; --dim:#9aa3b2; --acc:#ffb13b; --paid:#ff6b6b; --free:#4ecdc4; }
+  /* 白天（浅色）主题 */
+  [data-theme="light"] {
+    --bg:#f2f4f8; --panel:#ffffff; --panel2:#e9edf4; --line:#d3d9e4;
+    --fg:#1b2230; --dim:#5f6b85; --acc:#b97c08; --paid:#d13b3b; --free:#0e9485;
+  }
+  [data-theme="light"] header { background:#ffffffee; }
+  [data-theme="light"] .b-paid { background:#fde7e7; }
+  [data-theme="light"] .b-free { background:#e0f5f1; }
+  [data-theme="light"] .btn-accent { background:#f8e9c6; border-color:#c98a12; color:#8a5a10; }
+  [data-theme="light"] .btn-accent:hover { background:#f2dcab; }
+  [data-theme="light"] #statsModal { background:rgba(24,32,50,.4); }
+  [data-theme="light"] .jump-group input[type="date"] { color-scheme:light; }
+  [data-theme="light"] .bar-row .bbar i { background:linear-gradient(90deg,#d9a54a,var(--acc)); }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--fg); font:14px/1.6 "Microsoft YaHei",system-ui,sans-serif; }
+  header { position:sticky; top:0; z-index:10; background:#11141aee; backdrop-filter:blur(6px);
+           border-bottom:1px solid var(--line); padding:10px 18px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:17px; color:var(--acc); white-space:nowrap; }
+  #searchBox { flex:1; min-width:220px; position:relative; }
+  #searchBox input { width:100%; background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+                     border-radius:8px; padding:8px 12px; font-size:14px; outline:none; }
+  #searchBox input:focus { border-color:var(--acc); }
+  #suggest { position:absolute; top:110%; left:0; right:0; background:var(--panel); border:1px solid var(--line);
+             border-radius:8px; max-height:280px; overflow:auto; display:none; z-index:20; }
+  #suggest div { padding:7px 12px; cursor:pointer; }
+  #suggest div:hover, #suggest div.active { background:var(--panel2); }
+  .btn { background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:8px;
+         padding:8px 12px; cursor:pointer; font-size:13px; white-space:nowrap; }
+  .btn:hover { border-color:var(--acc); color:var(--acc); }
+  .btn-accent { background:#3a2c12; border-color:var(--acc); color:var(--acc); }
+  .btn-accent:hover { background:#4a3a1a; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .jump-group { display:flex; gap:6px; align-items:center; }
+  .jump-group input[type="date"] { background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+                                   border-radius:8px; padding:7px 8px; font-size:13px; color-scheme:dark; }
+  #statsModal { display:none; position:fixed; inset:0; z-index:50; background:#000a; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; }
+  #statsModal.open { display:flex; }
+  .modal-card { background:var(--panel); border:1px solid var(--line); border-radius:12px; width:min(640px,100%);
+                padding:20px 24px; box-shadow:0 12px 40px #000c; }
+  .modal-card h2 { font-size:16px; color:var(--acc); margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
+  .modal-card .close { cursor:pointer; color:var(--dim); font-size:20px; line-height:1; }
+  .modal-card .close:hover { color:var(--acc); }
+  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:16px; }
+  .stat-cell { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .stat-cell .num { font-size:20px; font-weight:bold; color:var(--fg); }
+  .stat-cell .lbl { font-size:11px; color:var(--dim); margin-top:2px; }
+  .modal-section { margin-top:12px; }
+  .modal-section h3 { font-size:13px; color:var(--dim); margin-bottom:6px; font-weight:normal; }
+  .bar-row { display:flex; align-items:center; gap:8px; font-size:12px; margin:3px 0; }
+  .bar-row .bname { width:110px; text-align:right; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar-row .bbar { flex:1; background:var(--panel2); border-radius:4px; height:12px; overflow:hidden; }
+  .bar-row .bbar i { display:block; height:100%; background:linear-gradient(90deg,#8a5a10,var(--acc)); }
+  .bar-row .bcnt { width:56px; color:var(--dim); }
+  .meta-line { font-size:11px; color:var(--dim); margin:2px 0; }
+  main { max-width:1100px; margin:16px auto; padding:0 16px; }
+  .stats { display:flex; gap:18px; flex-wrap:wrap; color:var(--dim); font-size:12px; margin-bottom:12px; }
+  .stats b { color:var(--fg); }
+  #calToolbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  #calTitle { font-size:18px; font-weight:bold; flex:1; }
+  table.cal { width:100%; border-collapse:collapse; table-layout:fixed; background:var(--panel);
+              border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  table.cal th { background:var(--panel2); color:var(--dim); font-weight:normal; padding:8px; font-size:12px; }
+  td.day { vertical-align:top; height:108px; border:1px solid var(--line); padding:6px; cursor:pointer; position:relative; }
+  td.day:hover { background:var(--panel2); }
+  td.other { opacity:.35; }
+  td.today { box-shadow:inset 0 0 0 2px var(--acc); }
+  .daynum { font-size:13px; color:var(--dim); }
+  .cnt { position:absolute; top:6px; right:8px; font-size:11px; color:var(--acc); font-weight:bold; }
+  .pv { font-size:11px; color:var(--fg); margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pv a.pvl { color:var(--fg); text-decoration:none; }
+  .pv a.pvl:hover { color:var(--acc); text-decoration:underline; }
+  .pv .paid { color:var(--paid); } .pv .free { color:var(--free); }
+  .more { font-size:10px; color:var(--dim); }
+  #dayPanel { margin-top:16px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; display:none; }
+  #todaySection { margin-bottom:20px; }
+  #todayHeading { font-size:17px; color:var(--acc); margin:12px 0 4px; }
+  #dayPanel h2 { font-size:16px; margin-bottom:8px; }
+  .ep { display:flex; gap:14px; border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin:10px 0; background:var(--panel2); }
+  .ep-body { flex:1; min-width:0; }
+  .ep-cover { flex-shrink:0; width:104px; align-self:flex-start; }
+  .ep-cover img { width:104px; height:104px; object-fit:cover; border-radius:8px; border:1px solid var(--line); display:block; }
+  .ep-cover:hover img { border-color:var(--acc); opacity:.9; }
+  .ep h3 { font-size:15px; }
+  .ep h3 a { color:var(--fg); text-decoration:none; } .ep h3 a:hover { color:var(--acc); }
+  .badge { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; margin-left:6px; vertical-align:2px; }
+  .b-paid { background:#3a1c1c; color:var(--paid); border:1px solid var(--paid); }
+  .b-free { background:#10271f; color:var(--free); border:1px solid var(--free); }
+  .b-cat { background:var(--panel); color:var(--dim); border:1px solid var(--line); }
+  .sub { color:var(--dim); font-size:13px; margin:2px 0 6px; }
+  .meta { color:var(--dim); font-size:12px; margin-bottom:6px; }
+  .djs { margin:6px 0; }
+  .dj { display:inline-flex; align-items:center; gap:5px; margin:2px 8px 2px 0; padding:3px 9px;
+        background:var(--panel); border:1px solid var(--line); border-radius:16px; font-size:12px; text-decoration:none; color:var(--fg); }
+  .dj:hover { border-color:var(--acc); color:var(--acc); }
+  .dj img { width:20px; height:20px; border-radius:50%; }
+  .dj .off { color:var(--acc); font-size:10px; }
+  .com { border-left:3px solid var(--acc); background:var(--panel); border-radius:6px; padding:7px 10px; margin:6px 0; font-size:13px; }
+  .com .who { color:var(--dim); font-size:11px; }
+  .cavatar { width:18px; height:18px; border-radius:50%; vertical-align:-4px; margin-right:3px; }
+  .empty { color:var(--dim); padding:20px; text-align:center; }
+  details.abdrop { margin-top:14px; border:1px dashed var(--line); border-radius:10px; padding:8px 12px; }
+  details.abdrop summary { cursor:pointer; color:var(--dim); font-size:13px; user-select:none; }
+  details.abdrop summary:hover { color:var(--acc); }
+  details.abdrop[open] summary { color:var(--acc); margin-bottom:6px; }
+  #resultsTitle { margin-bottom:8px; }
+  @media (max-width:700px){ td.day { height:80px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>📻 机核播客日历</h1>
+  <div id="searchBox">
+    <input id="searchInput" placeholder="搜索标题 / 副标题 / 简介 / 分类 / 正文…" autocomplete="off">
+    <div id="suggest"></div>
+  </div>
+  <div class="chips">
+    <button class="btn btn-accent" id="btnToday">📅 历史上的今天</button>
+    <span class="jump-group">
+      <input type="date" id="jumpDate" title="选择日期">
+      <button class="btn" id="btnJump">查看该日</button>
+    </span>
+    <button class="btn" id="btnStats">📊 统计</button>
+    <button class="btn" id="btnTheme" title="切换白天/夜间主题">🌙 夜间</button>
+  </div>
+</header>
+
+<!-- 统计详情弹窗 -->
+<div id="statsModal">
+  <div class="modal-card">
+    <h2>📊 索引统计 <span class="close" id="statsClose">✕</span></h2>
+    <div class="stat-grid" id="statGrid"></div>
+    <div class="modal-section" id="statCats"></div>
+    <div class="modal-section" id="statMeta"></div>
+  </div>
+</div>
+
+<main>
+  <div class="stats" id="statsBar">加载中…</div>
+
+  <div id="calToolbar">
+    <button class="btn" id="prevM">‹ 上月</button>
+    <div id="calTitle"></div>
+    <button class="btn" id="nextM">下月 ›</button>
+  </div>
+  <table class="cal">
+    <thead><tr><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr></thead>
+    <tbody id="calBody"></tbody>
+  </table>
+
+  <section id="todaySection">
+    <h2 id="todayHeading">📅 历史上的今天</h2>
+    <div id="dayPanel">
+      <h3 id="dayTitle"></h3>
+      <div id="dayEpisodes"></div>
+    </div>
+  </section>
+
+  <div id="searchPanel" style="display:none;">
+    <h2 id="resultsTitle"></h2>
+    <div id="searchResults"></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+let curY, curM, curD = null;        // 当前月 + 当前选中日
+let searchMode = false;
+
+const fmtDur = sec => {
+  sec = +sec || 0;
+  if (!sec) return "";
+  if (sec < 60) return sec + "秒";
+  const m = Math.floor(sec / 60);
+  if (m < 60) return m + "分钟";
+  const h = Math.floor(m / 60), mm = m % 60;
+  return h + "小时" + (mm ? mm + "分" : "");
+};
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const clamp = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s);
+
+async function api(path) {
+  const r = await fetch(path);
+  return r.json();
+}
+
+// ---------- 统计 ----------
+async function loadStats() {
+  try {
+    const s = await api("/api/stats");
+    const paid = s.episodes_paid || 0;
+    const alb = s.albums_official != null ? `${s.albums}（官方${s.albums_official}）` : s.albums;
+    $("#statsBar").innerHTML =
+      `已发布官方期数 <b>${s.episodes_published}</b> ｜ 付费期数 <b>${paid}</b>` +
+      ` ｜ 播客频道 <b>${alb}</b> ｜ 分类 <b>${s.categories}</b>` +
+      ` ｜ 精华评论 <b>${s.comments}</b> ｜ 范围 ${s.date_range[0]||"–"} ~ ${s.date_range[1]||"–"}` +
+      (s.last_incremental_at ? ` ｜ 最近增量 ${esc(s.last_incremental_at).replace("T"," ")}` : "");
+  } catch (e) { $("#statsBar").textContent = "统计加载失败（请先 py gcal.py backfill）"; }
+}
+
+// ---------- 月历 ----------
+async function renderMonth() {
+  searchMode = false;
+  $("#searchPanel").style.display = "none";
+  $("#dayPanel").style.display = "none";
+  $("#calTitle").textContent = `${curY} 年 ${curM} 月`;
+  const data = await api(`/api/month?y=${curY}&m=${curM}`);
+  const byDay = {};
+  (data.days || []).forEach(d => byDay[d.day] = d);
+  const first = new Date(curY, curM - 1, 1);
+  const startWeek = (first.getDay() + 6) % 7;      // 周一为一周开始
+  const daysInMonth = new Date(curY, curM, 0).getDate();
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+  let html = "", cell = 0;
+  for (let r = 0; r < 6; r++) {
+    html += "<tr>";
+    for (let w = 0; w < 7; w++, cell++) {
+      const dnum = cell - startWeek + 1;
+      const cls = ["day"];
+      if (dnum < 1 || dnum > daysInMonth) { html += `<td class="day other"></td>`; continue; }
+      const ym = `${curY}-${String(curM).padStart(2,"0")}-${String(dnum).padStart(2,"0")}`;
+      if (ym === todayStr) cls.push("today");
+      const mdStr = `${String(curM).padStart(2,"0")}-${String(dnum).padStart(2,"0")}`;
+      const info = byDay[dnum];
+      let pv = "";
+      if (info) {
+        (info.previews || []).forEach(p => pv += `<div class="pv"><a class="pvl" href="${p.url}" target="_blank" onclick="event.stopPropagation()">${esc(clamp(p.title, 22))}</a></div>`);
+        if (info.more > 0) pv += `<div class="more">… 等 ${info.count} 期</div>`;
+        if (info.audiobooks > 0) pv += `<div class="more">📖有声书 ${info.audiobooks} 期</div>`;
+      }
+      html += `<td class="${cls.join(" ")}" data-md="${mdStr}">` +
+              `<span class="daynum">${dnum}</span>` +
+              (info ? `<span class="cnt">${info.count}期</span>` : "") + pv + `</td>`;
+    }
+    html += "</tr>";
+    if (cell >= startWeek + daysInMonth) break;
+  }
+  $("#calBody").innerHTML = html;
+  document.querySelectorAll("td.day[data-md]").forEach(td =>
+    td.onclick = () => openDay(td.dataset.md));
+}
+
+// ---------- 日详情（历史上的今天 + 分页） ----------
+async function openDay(md, year = null, page = 1) {
+  curD = md;
+  $("#searchPanel").style.display = "none";
+  $("#todayHeading").textContent = "📅 历史上的今天 · " + md;
+  $("#dayPanel").style.display = "block";
+  const data = await api(`/api/day?d=${md}`);
+  const abN = data.audiobooks_count || 0;
+  if (!data.episodes.length && !abN) {
+    $("#dayTitle").textContent = `${md} 历史上的机核播客（共 0 期）`;
+    $("#dayEpisodes").innerHTML = `<div class="empty">该日暂无节目记录</div>`;
+  } else {
+    $("#dayTitle").textContent = `${md} 历史上的机核播客（共 ${data.total_episodes} 期 · 最新在前）` +
+      (abN ? ` ｜ 📖有声书 ${abN} 期另列` : "");
+    let html = data.episodes.length
+      ? data.episodes.map(cardHtml).join("")
+      : `<div class="empty">该日无非有声书节目</div>`;
+    if (abN > 0) {
+      html += `<details class="abdrop"><summary>📖 机核有声书（${abN} 期，点击展开）</summary>` +
+        data.audiobooks.map(cardHtml).join("") + `</details>`;
+    }
+    $("#dayEpisodes").innerHTML = html;
+  }
+  const sec = document.getElementById("todaySection");
+  if (sec && !searchMode) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function cardHtml(e) {
+  const badges = [];
+  if (e.category_name) badges.push(`<span class="badge b-cat">${esc(e.category_name)}</span>`);
+  if (e.is_require_privilege) badges.push(`<span class="badge b-paid">付费</span>`);
+  else if (e.is_free === 0) badges.push(`<span class="badge b-paid">收费</span>`);
+  const djs = (e.djs || []).map(d =>
+    `<a class="dj" href="${d.url}" target="_blank" title="个人主页">` +
+    (d.thumb ? `<img referrerpolicy="no-referrer" src="https://image.gcores.com/${esc(d.thumb)}?x-oss-process=image/resize,limit_1,m_fill,w_60,h_60" alt="">` : "") +
+    `${esc(d.nickname || d.user_id)}${d.is_gcores_official ? '<span class="off">✓官方</span>' : ""}</a>`).join("");
+  const coms = (e.comments || []).map(c =>
+    `<div class="com">💬 ${esc(clamp(c.body, 140))} <span class="who">` +
+    (c.thumb ? `<img class="cavatar" referrerpolicy="no-referrer" src="https://image.gcores.com/${esc(c.thumb)}?x-oss-process=image/resize,limit_1,m_fill,w_40,h_40" alt="">` : "") +
+    `— 👍${c.likes_count} ${esc(c.nickname || "匿名")}</span></div>`).join("");
+  const meta = [];
+  if (e.duration) meta.push(`时长 ${fmtDur(e.duration)}`);
+  if (e.comments_count != null) meta.push(`评论 ${e.comments_count}条`);
+  if (e.plays != null) meta.push(`播放 ${e.plays}`);
+  else if (e.is_require_privilege) meta.push(`播放 --（会员专享）`);
+  if (e.published_at) meta.push(`发布于 ${esc(String(e.published_at).replace("T"," ").slice(0,16))}`);
+  const cover = e.cover
+    ? `<a class="ep-cover" href="${e.url}" target="_blank" title="查看原页"><img referrerpolicy="no-referrer" src="https://image.gcores.com/${esc(e.cover)}?x-oss-process=image/resize,limit_1,m_fill,w_220,h_220/quality,q_90/format,webp" alt="" loading="lazy"></a>`
+    : "";
+  return `<div class="ep">
+    <div class="ep-body">
+      <h3><a href="${e.url}" target="_blank">${esc(e.title)}</a>${badges.join("")}</h3>
+      ${e.subtitle ? `<div class="sub">${esc(e.subtitle)}</div>` : ""}
+      <div class="meta">${meta.join(" ｜ ")}${e.album_title ? ` ｜ 所属频道：${esc(e.album_title)}` : ""}</div>
+      ${djs ? `<div class="djs">参与者：${djs}</div>` : ""}
+      ${coms || `<div class="com">暂无精华评论</div>`}
+    </div>
+    ${cover}
+  </div>`;
+}
+
+// ---------- 搜索 ----------
+async function doSearch(q) {
+  if (!q) return;
+  searchMode = true;
+  $("#dayPanel").style.display = "none";
+  $("#searchPanel").style.display = "block";
+  const data = await api(`/api/search?q=${encodeURIComponent(q)}&limit=50`);
+  $("#resultsTitle").textContent = `「${q}」 共 ${data.results.length} 条结果`;
+  $("#searchResults").innerHTML = data.results.length
+    ? data.results.map(e => {
+        const badge = e.category_name ? `<span class="badge b-cat">${esc(e.category_name)}</span>` : "";
+        const paid = e.is_require_privilege ? `<span class="badge b-paid">付费</span>` : "";
+        const cover = e.cover
+          ? `<a class="ep-cover" href="${e.url}" target="_blank"><img referrerpolicy="no-referrer" src="https://image.gcores.com/${esc(e.cover)}?x-oss-process=image/resize,limit_1,m_fill,w_220,h_220/quality,q_90/format,webp" alt="" loading="lazy"></a>`
+          : "";
+        const djs = e.djs && e.djs.length
+          ? `<div class="djs">参与者：${e.djs.map(d =>
+              `<a class="dj" href="${d.url}" target="_blank">` +
+              (d.thumb ? `<img referrerpolicy="no-referrer" src="https://image.gcores.com/${esc(d.thumb)}?x-oss-process=image/resize,limit_1,m_fill,w_60,h_60" alt="">` : "") +
+              `${esc(d.nickname || d.user_id)}</a>`).join("")}</div>` : "";
+        return `<div class="ep"><div class="ep-body">
+          <h3><a href="${e.url}" target="_blank">[${e.published_date}] ${esc(e.title)}</a>${badge}${paid}</h3>
+          ${e.subtitle ? `<div class="sub">${esc(e.subtitle)}</div>` : ""}
+          <div class="meta">${e.duration ? `时长 ${fmtDur(e.duration)}` : ""}${e.comments_count != null ? ` ｜ 评论 ${e.comments_count}条` : ""}${e.plays != null ? ` ｜ 播放 ${e.plays}` : (e.is_require_privilege ? ` ｜ 播放 --（会员专享）` : "")}</div>
+          ${djs}
+        </div>${cover}</div>`;
+      }).join("")
+    : `<div class="empty">没有匹配「${esc(q)}」的节目</div>`;
+}
+
+// ---------- 搜索提示 ----------
+let sugTimer = null;
+$("#searchInput").addEventListener("input", e => {
+  clearTimeout(sugTimer);
+  const q = e.target.value.trim();
+  if (!q) { $("#suggest").style.display = "none"; return; }
+  sugTimer = setTimeout(async () => {
+    const data = await api(`/api/suggest?q=${encodeURIComponent(q)}`);
+    const box = $("#suggest");
+    if (!data.suggestions.length) { box.style.display = "none"; return; }
+    box.innerHTML = data.suggestions.map((s, i) =>
+      `<div data-i="${i}">${esc(s.keyword)} <span style="color:var(--dim);font-size:11px">` +
+      (s.is_title ? "（标题）" : `出现${s.count}次`) + `</span></div>`).join("");
+    box.style.display = "block";
+    box.querySelectorAll("div").forEach(d =>
+      d.onclick = () => { $("#searchInput").value = d.textContent.split("（")[0].trim(); box.style.display = "none"; doSearch($("#searchInput").value); });
+  }, 150);
+});
+$("#searchInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") { $("#suggest").style.display = "none"; doSearch(e.target.value.trim()); }
+});
+
+// ---------- 统计详情弹窗 ----------
+async function openStats() {
+  const modal = $("#statsModal");
+  modal.classList.add("open");
+  try {
+    const s = await api("/api/stats");
+    const cell = (num, lbl) => `<div class="stat-cell"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`;
+    $("#statGrid").innerHTML =
+      cell(s.episodes_published, "已发布官方期数（每集播客）") +
+      cell(s.episodes_paid, "付费期数") +
+      cell(s.episodes_total, "期数(全量)") +
+      cell(`${s.albums}（官方 ${s.albums_official}）`, "播客频道（长期更新的系列，如游戏茶话会）") +
+      cell(s.categories, "分类（内容标签，如 Gadio Pro）") +
+      cell(s.comments, "精华评论") +
+      cell(s.users, "参与者/用户") +
+      cell(s.date_range[0] ? `${s.date_range[0]} ~ ${s.date_range[1]}` : "–", "日期范围");
+    const cats = s.categories_top || [];
+    const maxN = Math.max(1, ...cats.map(c => c.count));
+    $("#statCats").innerHTML = cats.length
+      ? `<h3>分类分布（前 12）</h3>` + cats.map(c =>
+          `<div class="bar-row"><span class="bname" title="${esc(c.name)}">${esc(c.name)}</span>` +
+          `<span class="bbar"><i style="width:${Math.round(c.count / maxN * 100)}%"></i></span>` +
+          `<span class="bcnt">${c.count}</span></div>`).join("")
+      : "";
+    const fmt = t => t ? String(t).replace("T", " ").slice(0, 19) : "–";
+    $("#statMeta").innerHTML = `<h3>抓取记录</h3>` +
+      `<div class="meta-line">专辑回填：${fmt(s.albums_done_at)}</div>` +
+      `<div class="meta-line">期数深扫：${fmt(s.sweep_done_at)}</div>` +
+      `<div class="meta-line">节目归属：${fmt(s.membership_done_at)}</div>` +
+      `<div class="meta-line">评论回填：${fmt(s.comments_done_at)}</div>` +
+      `<div class="meta-line">最近增量：${fmt(s.last_incremental_at)}</div>`;
+  } catch (e) {
+    $("#statGrid").innerHTML = `<div class="empty">统计加载失败</div>`;
+  }
+}
+function closeStats() { $("#statsModal").classList.remove("open"); }
+
+// ---------- 主题切换 ----------
+function syncThemeBtn() {
+  const t = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  $("#btnTheme").textContent = t === "dark" ? "☀️ 白天" : "🌙 夜间";
+  $("#btnTheme").title = t === "dark" ? "切换到白天界面" : "切换到夜间界面";
+}
+$("#btnTheme").onclick = () => {
+  const cur = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  const next = cur === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem("gcal-theme", next); } catch (e) {}
+  syncThemeBtn();
+};
+
+// ---------- 事件 ----------
+$("#btnToday").onclick = () => {
+  const now = new Date();
+  $("#jumpDate").value = now.toISOString().slice(0, 10);
+  curY = now.getFullYear(); curM = now.getMonth() + 1;
+  renderMonth().then(() => openDay(String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0")));
+};
+$("#btnJump").onclick = () => {
+  const v = $("#jumpDate").value;
+  if (!v) { $("#jumpDate").value = new Date().toISOString().slice(0, 10); return; }
+  const [y, m, d] = v.split("-").map(Number);
+  curY = y; curM = m;
+  renderMonth().then(() => openDay(String(m).padStart(2,"0") + "-" + String(d).padStart(2,"0")));
+};
+$("#jumpDate").addEventListener("keydown", e => { if (e.key === "Enter") $("#btnJump").click(); });
+$("#btnStats").onclick = openStats;
+$("#statsClose").onclick = closeStats;
+$("#statsModal").addEventListener("click", e => { if (e.target.id === "statsModal") closeStats(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeStats(); });
+$("#prevM").onclick = () => { curM--; if (curM < 1) { curM = 12; curY--; } renderMonth(); };
+$("#nextM").onclick = () => { curM++; if (curM > 12) { curM = 1; curY++; } renderMonth(); };
+
+(async () => {
+  const now = new Date();
+  curY = now.getFullYear(); curM = now.getMonth() + 1;
+  $("#jumpDate").value = now.toISOString().slice(0, 10);
+  syncThemeBtn();
+  await Promise.all([loadStats(), renderMonth()]);
+  openDay(String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0"));
+})();
+</script>
+</body>
+</html>

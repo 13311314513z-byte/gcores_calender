@@ -1,0 +1,11 @@
+# 机核播客日历 可选配置（删除本文件即用默认值）
+
+[crawl]
+request_interval = 1.0   # 请求间隔（秒），礼貌限速
+max_retries = 4          # 失败重试次数
+
+[scope]
+official_only = true     # 默认只看机核官方节目（owner-type=gcores）
+
+[incremental]
+comment_days = 30        # 每日增量刷新近 N 天期数的精华评论
