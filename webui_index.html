@@ -81,8 +81,18 @@
   footer.foot { margin-top:26px; padding:14px 4px 20px; border-top:1px solid var(--line);
                 color:var(--dim); font-size:11px; text-align:center; }
   main { max-width:1100px; margin:16px auto; padding:0 16px; }
-  .stats { display:flex; gap:18px; flex-wrap:wrap; color:var(--dim); font-size:12px; margin-bottom:12px; }
+  .stats { display:flex; gap:18px; flex-wrap:wrap; color:var(--dim); font-size:12px; margin-bottom:12px; align-items:center; }
   .stats b { color:var(--fg); }
+  .range-jump { display:inline-flex; gap:6px; align-items:center; margin-left:auto; }
+  .rj-label { color:var(--acc); }
+  .range-jump input[type="date"] { background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+                                   border-radius:6px; padding:4px 6px; font-size:12px; color-scheme:dark; }
+  [data-theme="light"] .range-jump input[type="date"] { color-scheme:light; }
+  .range-jump input[type="text"] { width:96px; background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+                                   border-radius:6px; padding:4px 6px; font-size:12px; outline:none; }
+  .range-jump input[type="text"]:focus { border-color:var(--acc); }
+  .range-jump input.invalid { border-color:var(--paid); }
+  .btn.mini { padding:4px 10px; font-size:12px; }
   #calToolbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
   #calTitle { font-size:18px; font-weight:bold; flex:1; }
   table.cal { width:100%; border-collapse:collapse; table-layout:fixed; background:var(--panel);
@@ -161,7 +171,15 @@
 </div>
 
 <main>
-  <div class="stats" id="statsBar">加载中…</div>
+  <div class="stats" id="statsBar">
+    <span id="statsText">加载中…</span>
+    <span class="range-jump" id="jumpBox" style="display:none">
+      <span class="rj-label">📅 快速跳转</span>
+      <input type="date" id="jumpDate" title="系统日历选择日期">
+      <input type="text" id="jumpText" placeholder="yyyy-mm-dd" maxlength="10" title="输入日期后回车">
+      <button class="btn mini" id="jumpGo">跳转</button>
+    </span>
+  </div>
 
   <div id="calToolbar">
     <button class="btn" id="prevM">‹ 上月</button>
@@ -224,13 +242,44 @@ async function loadStats() {
     if (s.version) $("#ver").textContent = s.version;
     const paid = s.episodes_paid || 0;
     const alb = s.albums_official != null ? `${s.albums}（官方${s.albums_official}）` : s.albums;
-    $("#statsBar").innerHTML =
+    $("#statsText").innerHTML =
       `已发布官方期数 <b>${s.episodes_published}</b> ｜ 付费期数 <b>${paid}</b>` +
       ` ｜ 播客频道 <b>${alb}</b> ｜ 分类 <b>${s.categories}</b>` +
-      ` ｜ 精华评论 <b>${s.comments}</b> ｜ 范围 ${s.date_range[0]||"–"} ~ ${s.date_range[1]||"–"}` +
+      ` ｜ 精华评论 <b>${s.comments}</b> ｜ 索引范围 <b>${s.date_range[0]||"–"} ~ ${s.date_range[1]||"–"}</b>` +
       (s.last_incremental_at ? ` ｜ 最近增量 ${esc(s.last_incremental_at).replace("T"," ")}` : "");
-  } catch (e) { $("#statsBar").textContent = "统计加载失败（请先 py gcal.py backfill）"; }
+    $("#jumpBox").style.display = "inline-flex";
+  } catch (e) { $("#statsText").textContent = "统计加载失败（请先 py gcal.py backfill）"; }
 }
+
+// ---------- 快速跳转日历 ----------
+function isValidDate(y, m, d) {
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+function doJump(y, m, d, fromEl) {
+  if (!isValidDate(y, m, d)) {
+    if (fromEl) { fromEl.classList.add("invalid"); setTimeout(() => fromEl.classList.remove("invalid"), 1200); }
+    return;
+  }
+  curY = y; curM = m;
+  renderMonth().then(() => openDay(String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0")));
+}
+$("#jumpGo").onclick = () => {
+  const v = $("#jumpText").value.trim();
+  if (!v) return;
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) { $("#jumpText").classList.add("invalid"); setTimeout(() => $("#jumpText").classList.remove("invalid"), 1200); return; }
+  doJump(+m[1], +m[2], +m[3], $("#jumpText"));
+};
+$("#jumpText").addEventListener("keydown", e => { if (e.key === "Enter") $("#jumpGo").click(); });
+$("#jumpText").addEventListener("input", () => $("#jumpText").classList.remove("invalid"));
+$("#jumpDate").addEventListener("change", e => {
+  const v = e.target.value;               // 系统日历选择 / 输入，格式 yyyy-mm-dd
+  if (!v) return;
+  const [y, m, d] = v.split("-").map(Number);
+  $("#jumpText").value = v;
+  doJump(y, m, d);
+});
 
 // ---------- 月历 ----------
 async function renderMonth() {
