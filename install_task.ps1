@@ -1,4 +1,4 @@
-﻿# 安装机核播客日历的 Windows 计划任务（用 Register-ScheduledTask，无需管理员）
+# 安装机核播客日历的 Windows 计划任务（用 Register-ScheduledTask，无需管理员）
 # 用法：powershell -ExecutionPolicy Bypass -File install_task.ps1
 $ErrorActionPreference = "Stop"
 
@@ -35,9 +35,9 @@ function New-GcalTask {
     }
 }
 
-# 1) 每日 12:00（中午）增量抓取
+# 1) 每日 12:00（中午）一条龙：备份 + 增量抓取 + 播放快照 + 完整性自检
 New-GcalTask -Name "GcoresCalendarDaily" `
-    -Argument ('"' + $gcal + '" incremental') `
+    -Argument ('"' + $gcal + '" daily') `
     -TriggerFactory { New-ScheduledTaskTrigger -Daily -At 12:00 }
 
 # 2) 每 6 小时轻量增量

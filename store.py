@@ -2,6 +2,7 @@
 """SQLite 存储层：建表、upsert、查询。全部标准库 sqlite3。"""
 import json
 import sqlite3
+from pathlib import Path
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS categories (
@@ -126,12 +127,14 @@ def connect(path=None):
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=10000")
     return conn
 
 
 def init_schema(conn):
     conn.executescript(SCHEMA)
     migrate(conn)
+    init_plays_history(conn)
     conn.commit()
 
 
@@ -226,7 +229,8 @@ def upsert_episode(conn, ep, fts=True):
         "is_limited_free=excluded.is_limited_free, is_published=excluded.is_published, "
         "is_listable=excluded.is_listable, is_fm=excluded.is_fm, is_news=excluded.is_news, "
         "owner_type=excluded.owner_type, plays=excluded.plays, likes_count=excluded.likes_count, "
-        "comments_count=excluded.comments_count, album_id=excluded.album_id, url=excluded.url",
+        "comments_count=excluded.comments_count, "
+        "album_id=COALESCE(excluded.album_id, episodes.album_id), url=excluded.url",
         (
             ep["id"], ep.get("title"), ep.get("subtitle"), ep.get("page_desc"),
             ep.get("content_text"), ep.get("category_id"), ep.get("cover"),
@@ -342,3 +346,112 @@ def extract_draftjs_text(content_json):
         return ""
     parts = [b.get("text", "") for b in blocks if isinstance(b, dict)]
     return "\n".join(p for p in parts if p)
+
+
+def backup_db(db_path=None, keep=7):
+    """备份索引库（WAL 检查点后复制），保留最近 keep 份。返回备份文件路径。"""
+    import shutil
+    from datetime import datetime
+    from config import DATA_DIR
+
+    if db_path is None:
+        db_path = DATA_DIR / "gcores_calendar.db"
+    db_path = Path(db_path)
+    bak_dir = DATA_DIR / "backups"
+    bak_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        c = connect(db_path)
+        c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        c.close()
+    except Exception:
+        pass
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    dst = bak_dir / f"gcores_calendar-{stamp}.db"
+    shutil.copy2(db_path, dst)
+    for f in sorted(bak_dir.glob("gcores_calendar-*.db"))[:-keep]:
+        try:
+            f.unlink()
+        except OSError:
+            pass
+    return str(dst)
+
+
+# ---------- 播放量趋势 ----------
+
+def init_plays_history(conn):
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS plays_history ("
+        "episode_id INTEGER NOT NULL, sampled_at TEXT NOT NULL, "
+        "plays INTEGER, likes_count INTEGER, comments_count INTEGER, "
+        "PRIMARY KEY (episode_id, sampled_at))"
+    )
+    conn.commit()
+
+
+def sample_plays(conn, sampled_at=None):
+    """为全部官方已发布期数记录当前 plays/likes/comments 快照（纯本地，无网络请求）。
+    当日已有快照则跳过（每日一次）。返回本次记录条数。"""
+    from datetime import datetime
+    if sampled_at is None:
+        sampled_at = datetime.now().strftime("%Y-%m-%d")
+    if conn.execute(
+        "SELECT 1 FROM plays_history WHERE sampled_at=? LIMIT 1", (sampled_at,)
+    ).fetchone():
+        return 0
+    rows = conn.execute(
+        "SELECT id, plays, likes_count, comments_count FROM episodes "
+        "WHERE is_published=1 AND owner_type='gcores'"
+    ).fetchall()
+    conn.executemany(
+        "INSERT OR REPLACE INTO plays_history(episode_id, sampled_at, plays, likes_count, comments_count) "
+        "VALUES(?,?,?,?,?)",
+        [(r["id"], sampled_at, r["plays"], r["likes_count"], r["comments_count"]) for r in rows],
+    )
+    conn.commit()
+    return len(rows)
+
+
+def hot_episodes(conn, days=7, limit=20):
+    """近 N 天播放增长榜：最新快照 vs N 天前快照的 plays 增量。"""
+    rows = conn.execute(
+        "WITH latest AS ("
+        "  SELECT episode_id, plays, sampled_at FROM plays_history ph1 "
+        "  WHERE sampled_at = (SELECT max(sampled_at) FROM plays_history ph2 "
+        "                      WHERE ph2.episode_id = ph1.episode_id)"
+        "),"
+        "base AS ("
+        "  SELECT episode_id, plays FROM plays_history ph1 "
+        "  WHERE sampled_at = (SELECT max(sampled_at) FROM plays_history ph2 "
+        "                      WHERE ph2.episode_id = ph1.episode_id "
+        "                      AND ph2.sampled_at <= date('now','localtime', ?))"
+        ") "
+        "SELECT l.episode_id, l.plays AS now_plays, "
+        "       coalesce(b.plays, 0) AS base_plays, "
+        "       l.plays - coalesce(b.plays, 0) AS delta "
+        "FROM latest l LEFT JOIN base b ON b.episode_id = l.episode_id "
+        "WHERE l.plays > 0 AND l.plays - coalesce(b.plays, 0) > 0 "
+        "ORDER BY delta DESC LIMIT ?",
+        (f"-{days} days", limit),
+    ).fetchall()
+    if not rows:
+        return []
+    ids = [r["episode_id"] for r in rows]
+    qmarks = ",".join("?" * len(ids))
+    meta = {
+        r["id"]: r
+        for r in conn.execute(
+            "SELECT id, title, published_date, url FROM episodes WHERE id IN (" + qmarks + ")",
+            ids,
+        )
+    }
+    out = []
+    for r in rows:
+        m = meta.get(r["episode_id"])
+        if not m:
+            continue
+        out.append({
+            "id": r["episode_id"], "title": m["title"],
+            "published_date": m["published_date"], "url": m["url"],
+            "now_plays": r["now_plays"], "delta": r["delta"],
+        })
+    return out

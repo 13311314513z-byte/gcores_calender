@@ -11,6 +11,23 @@
 
 ---
 
+## 1.4.0（2026-08-16）
+
+### P0 数据守护（工程完善）
+- 每日"一条龙"命令 `py gcal.py daily`：① 数据库备份（`data/backups/`，保留 7 份）→ ② 增量抓取 → ③ 播放量快照 → ④ 完整性自检（逐分类比对 API 计数并告警）
+- 计划任务每日动作升级为 `daily`；日志轮转（RotatingFileHandler 5MB×5）
+- SQLite 连接统一 `busy_timeout=10s`，并发任务不再互相锁死
+- 修复：重跑深扫会清空期数节目归属（album_id）的问题（upsert 改为 COALESCE 保留）
+
+### P1 检索与浏览（新功能）
+- **拼音/同音容错检索**：零依赖拼音表（assets/pinyin.txt），`ximeng` → 西蒙；"宫崎竣" → 宫崎骏（在线 + 离线 H5）
+- **搜索命中高亮 + 上下文片段预览**
+- **组合过滤**：分类 / 频道 / 仅付费 / 日期范围（Web 过滤栏 + CLI `--category/--album/--paid/--from/--to`）
+- **频道浏览**：Web"📻 频道"页（252 频道网格 + 频道内期数分页）；CLI `py gcal.py channel <id>`
+- **播放量趋势与热榜**：`plays_history` 每日快照（幂等），Web"🔥 热榜"弹窗 + CLI `py gcal.py hot`
+
+---
+
 ## 1.3.0（2026-08-16）
 
 ### 终端显示：机核有声书另列

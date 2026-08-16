@@ -25,14 +25,7 @@ config.ensure_dirs()
 
 
 def setup_logging(verbose=False):
-    logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[
-            logging.FileHandler(config.LOG_DIR / "gcal.log", encoding="utf-8"),
-            logging.StreamHandler(sys.stderr),
-        ],
-    )
+    config.setup_logging(verbose=verbose)
 
 
 def get_conn(args):
@@ -107,7 +100,51 @@ def cmd_incremental(args):
     client = GapiClient()
     conn = get_conn(args)
     store.init_schema(conn)
+    store.init_plays_history(conn)
     crawler.incremental(client, conn)
+
+
+def cmd_daily(args):
+    """每日一条龙：备份 + 增量抓取 + 播放快照 + 完整性自检。"""
+    from gapi import GapiClient
+    import crawler
+    client = GapiClient()
+    conn = get_conn(args)
+    store.init_schema(conn)
+    store.init_plays_history(conn)
+    # 1) 备份
+    bak = store.backup_db(args.db)
+    print(f"[1/4] 备份完成: {bak}")
+    # 2) 增量抓取
+    new_n = crawler.incremental(client, conn)
+    print(f"[2/4] 增量完成: 新增 {new_n} 期")
+    # 3) 播放量快照
+    n = store.sample_plays(conn)
+    print(f"[3/4] 播放快照: {n} 期已记录")
+    # 4) 完整性自检
+    problems = crawler.integrity_check(client, conn)
+    if problems:
+        print(f"[4/4] 完整性自检: ⚠️ {len(problems)} 个分类不一致 -> {problems}")
+    else:
+        print("[4/4] 完整性自检: ✅ 全部一致")
+
+
+def cmd_backup(args):
+    bak = store.backup_db(args.db)
+    print(f"备份完成: {bak}")
+
+
+def cmd_hot(args):
+    conn = get_conn(args)
+    store.init_plays_history(conn)
+    rows = store.hot_episodes(conn, days=args.days, limit=args.limit)
+    print(f"===== 近 {args.days} 天播放增长榜（Top {args.limit}）=====")
+    if not rows:
+        print("（暂无数据：每日增量时会自动记录播放快照）")
+        return
+    for i, r in enumerate(rows, 1):
+        print(f"{i:>2}. +{r['delta']:,} 播放（共 {r['now_plays']:,}）| {r['published_date']} | {r['title']}")
+        print(f"     {r['url']}")
 
 
 def cmd_keywords(args):
@@ -223,7 +260,9 @@ def cmd_month(args):
 def cmd_search(args):
     from search import search
     conn = get_conn(args)
-    rows = search(conn, args.q, limit=args.limit, official_only=not args.all)
+    rows = search(conn, args.q, limit=args.limit, official_only=not args.all,
+                  category=args.category, paid=args.paid, album=args.album,
+                  date_from=args.frm, date_to=args.to)
     print(f"===== 搜索「{args.q}」共 {len(rows)} 条 =====")
     for r in rows:
         e = {
@@ -262,6 +301,37 @@ def cmd_stats(args):
     print(f"日期范围: {s['date_range'][0]} ~ {s['date_range'][1]}")
     print(f"albums: {s['albums_done_at']}  sweep: {s['sweep_done_at']}  membership: {s['membership_done_at']}")
     print(f"comments: {s['comments_done_at']}  最近增量: {s['last_incremental_at']}")
+
+
+def cmd_channel(args):
+    import calendar_view
+    conn = get_conn(args)
+    chan = conn.execute("SELECT * FROM albums WHERE id=?", (args.id,)).fetchone()
+    if not chan:
+        print(f"频道 {args.id} 不存在")
+        return
+    total = conn.execute(
+        "SELECT count(*) n FROM episodes WHERE album_id=? AND is_published=1 "
+        "AND owner_type='gcores'", (args.id,)).fetchone()["n"]
+    per = args.per
+    offset = (args.page - 1) * per
+    rows = conn.execute(
+        "SELECT e.*, c.name AS category_name, a.title AS album_title "
+        "FROM episodes e "
+        "LEFT JOIN categories c ON c.id=e.category_id "
+        "LEFT JOIN albums a ON a.id=e.album_id "
+        "WHERE e.album_id=? AND e.is_published=1 AND e.owner_type='gcores' "
+        "ORDER BY e.published_date DESC, e.id DESC LIMIT ? OFFSET ?",
+        (args.id, per, offset)).fetchall()
+    print(f"===== 📻 {chan['title']}（共 {total} 期，第 {args.page} 页）=====")
+    if chan["description"]:
+        print(f"简介: {chan['description']}")
+    print(f"原页: https://www.gcores.com/albums/{args.id}")
+    for r in rows:
+        e = calendar_view.cards_from_rows(conn, [r])[0]
+        print()
+        for ln in _card_lines(e):
+            print(ln)
 
 
 def cmd_export_h5(args):
@@ -317,6 +387,17 @@ def main(argv=None):
     sp = sub.add_parser("incremental", help="每日增量")
     sp.set_defaults(fn=cmd_incremental)
 
+    sp = sub.add_parser("daily", help="每日一条龙：备份+增量+播放快照+完整性自检")
+    sp.set_defaults(fn=cmd_daily)
+
+    sp = sub.add_parser("backup", help="备份索引库（保留最近7份）")
+    sp.set_defaults(fn=cmd_backup)
+
+    sp = sub.add_parser("hot", help="近 N 天播放增长榜")
+    sp.add_argument("--days", type=int, default=7)
+    sp.add_argument("--limit", type=int, default=20)
+    sp.set_defaults(fn=cmd_hot)
+
     sp = sub.add_parser("keywords", help="重建关键词提示表")
     sp.set_defaults(fn=cmd_keywords)
 
@@ -340,6 +421,11 @@ def main(argv=None):
     sp = sub.add_parser("search", help="关键词检索")
     sp.add_argument("q")
     sp.add_argument("--limit", type=int, default=30)
+    sp.add_argument("--category", default=None, help="按分类过滤（如 Gadio Pro）")
+    sp.add_argument("--paid", type=int, choices=[0, 1], default=None, help="1=仅付费 0=仅免费")
+    sp.add_argument("--album", default=None, help="按频道标题过滤")
+    sp.add_argument("--from", dest="frm", default=None, help="起始日期 yyyy-mm-dd")
+    sp.add_argument("--to", dest="to", default=None, help="结束日期 yyyy-mm-dd")
     sp.set_defaults(fn=cmd_search)
 
     sp = sub.add_parser("suggest", help="关键词提示")
@@ -353,6 +439,12 @@ def main(argv=None):
     sp = sub.add_parser("export-h5", help="导出可双击打开的离线 H5 单文件")
     sp.add_argument("--out", default=None, help="输出文件路径")
     sp.set_defaults(fn=cmd_export_h5)
+
+    sp = sub.add_parser("channel", help="查看频道期数")
+    sp.add_argument("id", type=int, help="频道 id")
+    sp.add_argument("--page", type=int, default=1)
+    sp.add_argument("--per", type=int, default=10)
+    sp.set_defaults(fn=cmd_channel)
 
     sp = sub.add_parser("serve", help="启动本地 Web 界面")
     sp.add_argument("--port", type=int, default=8333)

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import calendar_view
 import config
+import search as search_mod
 import store
 from search import format_duration, search, suggest
 
@@ -160,9 +161,94 @@ class Handler(BaseHTTPRequestHandler):
             conn = self._db()
             q = qs.get("q", [""])[0]
             limit = int(qs.get("limit", ["30"])[0])
-            rows = search(conn, q, limit=limit)
+
+            def _opt(k):
+                v = qs.get(k, [""])[0]
+                return v if v else None
+
+            paid = qs.get("paid", [""])[0]
+            rows = search(
+                conn, q, limit=limit,
+                category=_opt("category"), album=_opt("album"),
+                date_from=_opt("from"), date_to=_opt("to"),
+                paid=(paid == "1") if paid in ("0", "1") else None,
+            )
             cards = calendar_view.cards_from_rows(conn, rows)
+            snips = {r["id"]: search_mod.snippet(q, r) for r in rows}
+            for c in cards:
+                c["snippet"] = snips.get(c["id"], "")
             self._send(200, {"query": q, "results": cards})
+            return
+
+        if path == "/api/categories":
+            conn = self._db()
+            cats = [
+                {"name": r["name"], "count": r["n"]}
+                for r in conn.execute(
+                    "SELECT c.name AS name, count(*) AS n FROM episodes e "
+                    "LEFT JOIN categories c ON c.id=e.category_id "
+                    "WHERE e.is_published=1 AND e.owner_type='gcores' AND c.name IS NOT NULL "
+                    "GROUP BY c.name ORDER BY n DESC")
+            ]
+            self._send(200, {"categories": cats})
+            return
+
+        if path == "/api/channels":
+            conn = self._db()
+            chans = [
+                {"id": r["id"], "title": r["title"], "description": r["description"],
+                 "cover": r["cover"], "radios_count": r["radios_count"],
+                 "is_require_privilege": r["is_require_privilege"],
+                 "owner_type": r["owner_type"],
+                 "url": config.SITE + f"/albums/{r['id']}"}
+                for r in conn.execute(
+                    "SELECT id, title, description, cover, radios_count, "
+                    "is_require_privilege, owner_type FROM albums "
+                    "WHERE is_published=1 ORDER BY "
+                    "(owner_type='gcores') DESC, radios_count DESC")
+            ]
+            self._send(200, {"channels": chans})
+            return
+
+        if path == "/api/channel":
+            conn = self._db()
+            cid = int(qs.get("id", ["0"])[0])
+            page = max(1, int(qs.get("page", ["1"])[0]))
+            per = 10
+            chan = conn.execute("SELECT * FROM albums WHERE id=?", (cid,)).fetchone()
+            if not chan:
+                self._send(404, {"error": "channel not found"})
+                return
+            total = conn.execute(
+                "SELECT count(*) n FROM episodes WHERE album_id=? AND is_published=1 "
+                "AND owner_type='gcores'", (cid,)).fetchone()["n"]
+            offset = (page - 1) * per
+            rows = conn.execute(
+                "SELECT e.*, c.name AS category_name, a.title AS album_title "
+                "FROM episodes e "
+                "LEFT JOIN categories c ON c.id=e.category_id "
+                "LEFT JOIN albums a ON a.id=e.album_id "
+                "WHERE e.album_id=? AND e.is_published=1 AND e.owner_type='gcores' "
+                "ORDER BY e.published_date DESC, e.id DESC LIMIT ? OFFSET ?",
+                (cid, per, offset)).fetchall()
+            self._send(200, {
+                "channel": {
+                    "id": chan["id"], "title": chan["title"],
+                    "description": chan["description"], "cover": chan["cover"],
+                    "radios_count": chan["radios_count"],
+                    "is_require_privilege": chan["is_require_privilege"],
+                    "url": config.SITE + f"/albums/{chan['id']}",
+                },
+                "total": total, "page": page,
+                "total_pages": max(1, (total + per - 1) // per),
+                "episodes": calendar_view.cards_from_rows(conn, rows),
+            })
+            return
+
+        if path == "/api/hot":
+            conn = self._db()
+            days = int(qs.get("days", ["7"])[0])
+            self._send(200, {"days": days, "hot": store.hot_episodes(conn, days=days)})
             return
 
         if path == "/api/suggest":

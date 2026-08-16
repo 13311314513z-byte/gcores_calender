@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """机核播客日历工具 - 配置（全部标准库，无第三方依赖）"""
+import logging
 import os
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -11,7 +13,7 @@ CONFIG_PATH = BASE_DIR / "config.toml"
 
 # ---- 应用信息 ----
 APP_NAME = "机核播客日历"
-VERSION = "1.3.0"   # 语义化版本：MAJOR 重大重构 / MINOR 新增功能 / PATCH 修复与小调整（见 CHANGELOG.md）
+VERSION = "1.4.0"   # 语义化版本：MAJOR 重大重构 / MINOR 新增功能 / PATCH 修复与小调整（见 CHANGELOG.md）
 
 # ---- 站点 ----
 SITE = "https://www.gcores.com"
@@ -69,3 +71,25 @@ def apply_config():
 def ensure_dirs():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+    (DATA_DIR / "backups").mkdir(parents=True, exist_ok=True)
+
+
+def setup_logging(verbose=False, name=None):
+    """统一日志：控制台 + 文件（按大小轮转，最多 5 份 × 5MB）。"""
+    ensure_dirs()
+    level = logging.DEBUG if verbose else logging.INFO
+    root = logging.getLogger()
+    if root.handlers:
+        # 已配置过（如 Web 服务多线程），只调整级别
+        root.setLevel(level)
+        return root
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    fh = RotatingFileHandler(LOG_DIR / "gcal.log", maxBytes=5 * 1024 * 1024,
+                             backupCount=5, encoding="utf-8")
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+    root.addHandler(sh)
+    root.setLevel(level)
+    return root

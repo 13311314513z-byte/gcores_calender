@@ -343,6 +343,8 @@ def backfill_comments(client, conn, top_n=3):
         try:
             ranked = fetch_top_comments(client, rid, top_n)
             store.replace_comments(conn, rid, ranked)
+            store._set_meta(conn, "comments_cursor", rid)
+            conn.commit()   # 每期提交，避免长事务阻塞其他任务（如 daily）
             done += 1
         except GapiError as e:
             errors += 1
@@ -356,8 +358,6 @@ def backfill_comments(client, conn, top_n=3):
             log.warning("comments error rid=%d: %s", rid, e)
             break
         if done % 50 == 0:
-            store._set_meta(conn, "comments_cursor", rid)
-            conn.commit()
             log.info("comments done=%d errors=%d cursor=%d", done, errors, rid)
     store._set_meta(conn, "comments_cursor", rows[-1]["id"] if rows else cursor)
     store._set_meta(conn, "comments_done_at", now_iso())
@@ -366,6 +366,33 @@ def backfill_comments(client, conn, top_n=3):
 
 
 # ---------------- 每日增量 ----------------
+
+def integrity_check(client, conn):
+    """数据完整性自检：每个分类的库内期数 vs API record-count，不一致记告警。"""
+    log.info("integrity check start")
+    cats = conn.execute("SELECT id, name FROM categories ORDER BY id").fetchall()
+    problems = []
+    for cat in cats:
+        cid = cat["id"]
+        try:
+            resp = client.get(f"/categories/{cid}/radios", {"page[offset]": 0})
+            api_count = int((resp.get("meta") or {}).get("record-count", 0))
+        except GapiError as e:
+            log.warning("integrity check category %s failed: %s", cid, e)
+            continue
+        db_count = conn.execute(
+            "SELECT count(*) n FROM episodes WHERE category_id=? AND is_published=1",
+            (cid,),
+        ).fetchone()["n"]
+        if db_count != api_count:
+            problems.append((cat["name"], db_count, api_count))
+            log.warning("完整性告警: 分类[%s] 库内 %d vs API %d", cat["name"], db_count, api_count)
+    if not problems:
+        log.info("integrity check ok: %d categories 全部一致", len(cats))
+    else:
+        log.warning("integrity check done: %d/%d 分类不一致", len(problems), len(cats))
+    return problems
+
 
 def incremental(client, conn):
     """每日增量：新期数（详情+评论）+ 新专辑 + 近 N 天评论刷新。"""
@@ -466,4 +493,5 @@ def incremental(client, conn):
     store._set_meta(conn, "last_incremental_at", now_iso())
     conn.commit()
     log.info("incremental done in %.1fs (%d new)", time.time() - t0, len(new_ids))
+    # 播放量快照仅在每日定时任务（daily）中更新，此处不采样（保持热榜按日更新节奏）
     return len(new_ids)

@@ -32,7 +32,7 @@ def build_snapshot(conn):
     for r in conn.execute(
         "SELECT e.id, e.title, e.subtitle, e.page_desc, e.published_at, e.published_date, "
         "e.duration, e.is_free, e.is_require_privilege, e.plays, e.comments_count, "
-        "e.cover, e.url, c.name AS category_name, a.title AS album_title "
+        "e.cover, e.url, e.album_id, c.name AS category_name, a.title AS album_title "
         "FROM episodes e "
         "LEFT JOIN categories c ON c.id=e.category_id "
         "LEFT JOIN albums a ON a.id=e.album_id "
@@ -43,7 +43,7 @@ def build_snapshot(conn):
             "pa": r["published_at"], "p": r["published_date"],
             "du": r["duration"], "f": r["is_free"], "pr": r["is_require_privilege"],
             "pl": r["plays"], "cc": r["comments_count"], "cv": r["cover"], "u": r["url"],
-            "cn": r["category_name"], "at": r["album_title"],
+            "cn": r["category_name"], "at": r["album_title"], "ai": r["album_id"],
         })
     # 参与者（djs）
     djs = {}
@@ -65,6 +65,36 @@ def build_snapshot(conn):
     keywords = [{"k": r["keyword"], "c": r["count"]}
                 for r in conn.execute(
                     "SELECT keyword, count FROM keywords ORDER BY count DESC")]
+    # 频道列表（供频道浏览）
+    channels = [
+        {"id": r["id"], "title": r["title"], "description": r["description"],
+         "cover": r["cover"], "radios_count": r["radios_count"],
+         "is_require_privilege": r["is_require_privilege"],
+         "owner_type": r["owner_type"],
+         "url": config.SITE + f"/albums/{r['id']}"}
+        for r in conn.execute(
+            "SELECT id, title, description, cover, radios_count, "
+            "is_require_privilege, owner_type FROM albums "
+            "WHERE is_published=1 ORDER BY (owner_type='gcores') DESC, radios_count DESC")
+    ]
+    # 拼音索引（标题/副标题/分类/参与者），供离线同音与拼音检索
+    import pinyin as P
+    py_index = {}
+    dj = {}
+    for r in conn.execute(
+        "SELECT d.radio_id, u.nickname FROM episode_djs d "
+        "JOIN users u ON u.id=d.user_id"):
+        dj.setdefault(r["radio_id"], []).append(r["nickname"] or "")
+    for e in episodes:
+        text = " ".join([e["t"] or "", e["s"] or "", e["cn"] or ""] + dj.get(e["id"], []))
+        py_index[str(e["id"])] = P.pinyinize(text)
+    py_nicks = [
+        {"n": r["nickname"], "py": P.pinyinize(r["nickname"] or "")}
+        for r in conn.execute("SELECT DISTINCT nickname FROM users WHERE nickname IS NOT NULL")
+    ]
+    # 热榜快照（近 7 天播放增长 Top20，离线静态）
+    store.init_plays_history(conn)
+    hot = store.hot_episodes(conn, days=7, limit=20)
     # 统计
     def meta(k):
         row = conn.execute("SELECT value FROM crawl_meta WHERE key=?", (k,)).fetchone()
@@ -103,6 +133,10 @@ def build_snapshot(conn):
         "djs": djs,
         "comments": comments,
         "keywords": keywords,
+        "channels": channels,
+        "py_index": py_index,
+        "py_nicks": py_nicks,
+        "hot": hot,
         "stats": stats,
         "generated_at": meta("last_incremental_at") or "",
     }
@@ -141,9 +175,20 @@ function __card(e) {
     published_at: e.pa, published_date: e.p, duration: e.du,
     is_free: e.f, is_require_privilege: e.pr, plays: e.pl,
     comments_count: e.cc, cover: e.cv, url: e.u,
-    category_name: e.cn, album_title: e.at, djs: dj, comments: com,
+    category_name: e.cn, album_title: e.at, djs: dj, comments: com, snippet: "",
   };
 }
+
+function __snip(e, ql) {
+  const text = e.pd || "";
+  const i = text.toLowerCase().indexOf(ql);
+  if (i < 0) return "";
+  const w = 60, s = Math.max(0, i - w), en = Math.min(text.length, i + ql.length + w);
+  return (s > 0 ? "…" : "") + text.slice(s, en).replace(/\s+/g, " ").trim() + (en < text.length ? "…" : "");
+}
+
+const __PY = __D.py_index || {};
+const __PYNICKS = __D.py_nicks || [];
 
 async function api(path) {
   const u = new URL(path, location.href);
@@ -186,15 +231,51 @@ async function api(path) {
   if (p.endsWith("/api/search")) {
     const qq = (q.get("q") || "").toLowerCase();
     const limit = +q.get("limit") || 50;
-    if (!qq) return {query: qq, results: []};
-    const hits = __D.episodes.filter(e =>
-      (e.t || "").toLowerCase().includes(qq) ||
-      (e.s || "").toLowerCase().includes(qq) ||
-      (e.pd || "").toLowerCase().includes(qq) ||
-      (e.cn || "").toLowerCase().includes(qq) ||
-      (__USER_INDEX[e.id] || "").toLowerCase().includes(qq));
-    return {query: qq, results: __sortDesc(hits).slice(0, limit).map(__card)};
+    const cat = q.get("category"), alb = q.get("album"), paid = q.get("paid");
+    const fFrom = q.get("from"), fTo = q.get("to");
+    if (!qq && !cat && !alb && !paid && !fFrom && !fTo) return {query: qq, results: []};
+    const hits = __D.episodes.filter(e => {
+      if (cat && (e.cn || "") !== cat) return false;
+      if (alb && (e.at || "") !== alb) return false;
+      if (paid === "1" && !e.pr) return false;
+      if (fFrom && (e.p || "") < fFrom) return false;
+      if (fTo && (e.p || "") > fTo) return false;
+      if (!qq) return true;
+      if ((e.t || "").toLowerCase().includes(qq)) return true;
+      if ((e.s || "").toLowerCase().includes(qq)) return true;
+      if ((e.pd || "").toLowerCase().includes(qq)) return true;
+      if ((e.cn || "").toLowerCase().includes(qq)) return true;
+      if ((__USER_INDEX[e.id] || "").toLowerCase().includes(qq)) return true;
+      // 拼音匹配（拉丁输入）：索引里已有各期拼音串
+      if (/[a-z]/.test(qq) && (__PY[e.id] || "").includes(qq)) return true;
+      return false;
+    });
+    const results = __sortDesc(hits).slice(0, limit).map(e => {
+      const c = __card(e);
+      c.snippet = __snip(e, qq);
+      return c;
+    });
+    return {query: qq, results};
   }
+  if (p.endsWith("/api/categories")) {
+    const cnt = {};
+    for (const e of __D.episodes) if (e.cn) cnt[e.cn] = (cnt[e.cn] || 0) + 1;
+    return {categories: Object.entries(cnt).sort((a, b) => b[1] - a[1])
+      .map(([name, n]) => ({name, count: n}))};
+  }
+  if (p.endsWith("/api/channels")) return {channels: __D.channels || []};
+  if (p.endsWith("/api/channel")) {
+    const cid = +q.get("id"), page = Math.max(1, +q.get("page") || 1), per = 10;
+    const ch = (__D.channels || []).find(c => c.id === cid);
+    if (!ch) return {error: "channel not found"};
+    const eps = __sortDesc(__D.episodes.filter(e => e.ai === cid));
+    const total = eps.length, totalPages = Math.max(1, Math.ceil(total / per));
+    return {
+      channel: ch, total, page, total_pages: totalPages,
+      episodes: eps.slice((page - 1) * per, page * per).map(__card),
+    };
+  }
+  if (p.endsWith("/api/hot")) return {days: 7, hot: __D.hot || []};
   if (p.endsWith("/api/suggest")) {
     const pre = (q.get("q") || "").toLowerCase();
     const out = [];
@@ -221,6 +302,14 @@ async function api(path) {
           }
         }
       }
+      if (out.length < 10 && /[a-z]/.test(pre)) {
+        for (const nick of __PYNICKS) {
+          if (nick.py.startsWith(pre)) {
+            out.push({keyword: nick.n, count: null, is_user: true});
+            if (out.length >= 10) break;
+          }
+        }
+      }
     }
     return {suggestions: out};
   }
@@ -239,13 +328,13 @@ def export_h5(db_path=None, out_path=None):
     snapshot = build_snapshot(conn)
     html = (BASE_DIR / "webui_index.html").read_text(encoding="utf-8")
 
-    # 1) 替换数据层
+    # 1) 替换数据层（用函数式替换，避免替换串中的 \s 等被当作转义）
     pattern = re.compile(
         re.escape(DATA_LAYER_START) + r".*?" + re.escape(DATA_LAYER_END),
         re.S)
     if not pattern.search(html):
         raise RuntimeError("webui_index.html 缺少数据层标记")
-    html = pattern.sub(EMBEDDED_LAYER.strip(), html)
+    html = pattern.sub(lambda m: EMBEDDED_LAYER.strip(), html)
 
     # 2) 注入快照数据（插在主脚本之前）
     data_script = ("<script>window.__GCAL_DATA__ = " +
