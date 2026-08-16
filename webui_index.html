@@ -69,6 +69,8 @@
   .bar-row .bbar i { display:block; height:100%; background:linear-gradient(90deg,#8a5a10,var(--acc)); }
   .bar-row .bcnt { width:56px; color:var(--dim); }
   .meta-line { font-size:11px; color:var(--dim); margin:2px 0; }
+  footer.foot { margin-top:26px; padding:14px 4px 20px; border-top:1px solid var(--line);
+                color:var(--dim); font-size:11px; text-align:center; }
   main { max-width:1100px; margin:16px auto; padding:0 16px; }
   .stats { display:flex; gap:18px; flex-wrap:wrap; color:var(--dim); font-size:12px; margin-bottom:12px; }
   .stats b { color:var(--fg); }
@@ -173,6 +175,10 @@
     <h2 id="resultsTitle"></h2>
     <div id="searchResults"></div>
   </div>
+
+  <footer class="foot">
+    机核播客日历 v<span id="ver">–</span> ｜ 本地个人索引工具：仅收录公开元数据与公开评论，不存储音频 ｜ 数据源 www.gcores.com
+  </footer>
 </main>
 
 <script>
@@ -205,6 +211,7 @@ async function api(path) {
 async function loadStats() {
   try {
     const s = await api("/api/stats");
+    if (s.version) $("#ver").textContent = s.version;
     const paid = s.episodes_paid || 0;
     const alb = s.albums_official != null ? `${s.albums}（官方${s.albums_official}）` : s.albums;
     $("#statsBar").innerHTML =
@@ -397,6 +404,7 @@ async function openStats() {
       : "";
     const fmt = t => t ? String(t).replace("T", " ").slice(0, 19) : "–";
     $("#statMeta").innerHTML = `<h3>抓取记录</h3>` +
+      `<div class="meta-line">版本：${esc(s.version || "–")}</div>` +
       `<div class="meta-line">专辑回填：${fmt(s.albums_done_at)}</div>` +
       `<div class="meta-line">期数深扫：${fmt(s.sweep_done_at)}</div>` +
       `<div class="meta-line">节目归属：${fmt(s.membership_done_at)}</div>` +

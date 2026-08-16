@@ -181,8 +181,8 @@ def month_data(conn, yyyy, mm, official_only=None):
 
 
 def stats(conn):
+    out = {"version": config.VERSION}
     base = _filters(True, '')
-    out = {}
     out["episodes_total"] = conn.execute("SELECT count(*) n FROM episodes").fetchone()["n"]
     out["episodes_published"] = conn.execute(
         f"SELECT count(*) n FROM episodes WHERE {base}").fetchone()["n"]

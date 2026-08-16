@@ -72,6 +72,7 @@ def build_snapshot(conn):
     base = "is_published=1 AND owner_type='gcores'"
     row = conn.execute(f"SELECT min(published_date) mn, max(published_date) mx FROM episodes WHERE {base}").fetchone()
     stats = {
+        "version": config.VERSION,
         "episodes_total": conn.execute("SELECT count(*) n FROM episodes").fetchone()["n"],
         "episodes_published": conn.execute(f"SELECT count(*) n FROM episodes WHERE {base}").fetchone()["n"],
         "episodes_paid": conn.execute(

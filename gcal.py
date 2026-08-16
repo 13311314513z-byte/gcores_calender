@@ -253,6 +253,7 @@ def cmd_stats(args):
     conn = get_conn(args)
     s = calendar_view.stats(conn)
     print("===== 索引统计 =====")
+    print(f"版本: {config.APP_NAME} v{s['version']}")
     print(f"期数(全量): {s['episodes_total']}   已发布官方: {s['episodes_published']}   付费: {s['episodes_paid']}")
     print(f"播客频道(系列): {s['albums']} (官方 {s['albums_official']})   分类: {s['categories']}")
     print(f"精华评论: {s['comments']}   用户: {s['users']}")
@@ -282,6 +283,8 @@ def main(argv=None):
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(prog="gcal", description="机核播客日历索引工具")
+    p.add_argument("--version", action="version",
+                   version=f"{config.APP_NAME} v{config.VERSION}")
     p.add_argument("--db", default=str(config.DB_PATH), help="SQLite 数据库路径")
     p.add_argument("--all", action="store_true", help="包含非官方（机组用户）内容")
     p.add_argument("-v", "--verbose", action="store_true")
