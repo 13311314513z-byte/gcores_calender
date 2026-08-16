@@ -122,8 +122,16 @@ def day_data(conn, md, year=None, page=1, per_page=10, official_only=None, inclu
         "ORDER BY e.published_date DESC, e.id DESC",
         (md,),
     ).fetchall()
-    audiobooks = _episode_cards(conn, ab_rows)
-    if not include_audiobooks:
+    if include_audiobooks == "compact":
+        # 终端紧凑另列：仅日期/标题/链接
+        audiobooks = [
+            {"id": r["id"], "title": r["title"], "published_date": r["published_date"],
+             "url": config.SITE + f"/radios/{r['id']}"}
+            for r in ab_rows
+        ]
+    elif include_audiobooks:
+        audiobooks = _episode_cards(conn, ab_rows)
+    else:
         audiobooks = []
     return {
         "date": md,

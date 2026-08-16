@@ -6,7 +6,7 @@
 - **范围**：机核官方节目（`owner-type=gcores`）+ 分类全量期数（付费期数完整收录），付费期数以"付费"徽标标识
 - **内容**：仅公开元数据与公开评论文本，**不下载、不存储任何音频**
 - **依赖**：Python 3.11+ 标准库（urllib / sqlite3 / http.server / FTS5），**零第三方包**
-- **版本**：当前 **v1.2.0**（`py gcal.py --version`；Web 页脚与统计弹窗、离线 H5 页脚同步展示）。版本规则与历史见 [CHANGELOG.md](CHANGELOG.md)（语义化：MAJOR 重构 / MINOR 新功能 / PATCH 修复）
+- **版本**：当前 **v1.3.0**（`py gcal.py --version`；Web 页脚与统计弹窗、离线 H5 页脚同步展示）。版本规则与历史见 [CHANGELOG.md](CHANGELOG.md)（语义化：MAJOR 重构 / MINOR 新功能 / PATCH 修复）
 
 ---
 
@@ -81,7 +81,7 @@ py gcal.py serve
 ## 命令行用法（完整）
 
 ```powershell
-py gcal.py today                    # 历史上的今天
+py gcal.py today                    # 历史上的今天（有声书在下方另列）
 py gcal.py day 04-23                # 指定月-日（--year 2020 --page 2）
 py gcal.py month 2026-08            # 月历
 py gcal.py search 宫崎骏            # 关键词检索（标题/副标题/简介/分类/正文/参与者昵称）
@@ -95,7 +95,7 @@ py gcal.py membership               # 节目归属补录（断点续抓）
 py gcal.py keywords                 # 重建关键词提示表
 py gcal.py export-h5                # 导出可双击打开的离线 H5 单文件（机核播客日历.html）
 py gcal.py --all day 04-23          # 包含非官方（机组用户）内容
-py gcal.py day 04-23 --audiobooks   # 包含机核有声书
+py gcal.py day 04-23 --audiobooks   # 有声书以完整卡片另列（默认紧凑单行另列）
 ```
 
 ## 定时任务（Windows）

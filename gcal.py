@@ -165,7 +165,7 @@ def cmd_today(args):
     md = calendar_view.today_md()
     data = calendar_view.day_data(conn, md, year=args.year, page=args.page,
                                   official_only=not args.all,
-                                  include_audiobooks=args.audiobooks)
+                                  include_audiobooks=True if args.audiobooks else "compact")
     _print_day(data, md, args.all, args.audiobooks)
 
 
@@ -175,7 +175,7 @@ def cmd_day(args):
     md = args.date
     data = calendar_view.day_data(conn, md, year=args.year, page=args.page,
                                   official_only=not args.all,
-                                  include_audiobooks=args.audiobooks)
+                                  include_audiobooks=True if args.audiobooks else "compact")
     _print_day(data, md, args.all, args.audiobooks)
 
 
@@ -193,17 +193,18 @@ def _print_day(data, md, all_flag, show_ab=False):
                 print(ln)
     elif data["audiobooks_count"]:
         print("（该日无非有声书节目）")
+    # 有声书另列（默认紧凑单行；--audiobooks 显示完整卡片）
     if data["audiobooks_count"]:
+        print()
+        print(f"----- 📖 机核有声书（{data['audiobooks_count']} 期 · 另列）-----")
         if show_ab:
-            print()
-            print(f"----- 机核有声书（{data['audiobooks_count']} 期）-----")
             for e in data["audiobooks"]:
                 print()
                 for ln in _card_lines(e):
                     print(ln)
         else:
-            print()
-            print(f"（另有 {data['audiobooks_count']} 期机核有声书，可用 --audiobooks 查看）")
+            for e in data["audiobooks"]:
+                print(f"📖 {e['published_date']} | {e['title']} | {e['url']}")
 
 
 def cmd_month(args):
@@ -215,7 +216,8 @@ def cmd_month(args):
     for d in data["days"]:
         prev = "、".join(p["title"] for p in d["previews"])
         more = f" 等{d['count']}期" if d["count"] > len(d["previews"]) else ""
-        print(f"{d['day']:02d}日: {prev}{more}")
+        ab = f"  📖有声书{d['audiobooks']}期另列" if d.get("audiobooks") else ""
+        print(f"{d['day']:02d}日: {prev}{more}{ab}")
 
 
 def cmd_search(args):
