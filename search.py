@@ -21,7 +21,7 @@ def _base_where(official_only):
 
 
 def search(conn, q, limit=30, official_only=None):
-    """关键词检索：标题/副标题/简介/正文（FTS5）+ 分类名（LIKE）。"""
+    """关键词检索：标题/副标题/简介/正文（FTS5）+ 分类名（LIKE）+ 参与者昵称。"""
     if official_only is None:
         official_only = config.DEFAULT_OFFICIAL_ONLY
     q = (q or "").strip()
@@ -56,11 +56,26 @@ def search(conn, q, limit=30, official_only=None):
         ).fetchall()
         seen = {r["id"] for r in rows}
         rows.extend(r for r in extra if r["id"] not in seen)
+    # 参与者昵称匹配（用户搜索）
+    if len(rows) < limit:
+        user_rows = conn.execute(
+            "SELECT DISTINCT e.*, c.name AS category_name, a.title AS album_title "
+            "FROM episodes e "
+            "LEFT JOIN categories c ON c.id=e.category_id "
+            "LEFT JOIN albums a ON a.id=e.album_id "
+            f"WHERE {base_w} AND EXISTS ("
+            "SELECT 1 FROM episode_djs d JOIN users u ON u.id=d.user_id "
+            "WHERE d.radio_id=e.id AND u.nickname LIKE ?) "
+            "ORDER BY e.published_date DESC, e.id DESC LIMIT ?",
+            (like, limit - len(rows)),
+        ).fetchall()
+        seen = {r["id"] for r in rows}
+        rows.extend(r for r in user_rows if r["id"] not in seen)
     return rows
 
 
 def suggest(conn, prefix, limit=10):
-    """关键词提示：词表前缀匹配 + 标题前缀匹配。"""
+    """关键词提示：词表前缀匹配 + 标题前缀匹配 + 参与者昵称匹配。"""
     prefix = (prefix or "").strip().lower()
     if not prefix:
         return []
@@ -79,6 +94,15 @@ def suggest(conn, prefix, limit=10):
             (prefix + "%", n),
         ):
             out.append({"keyword": row["title"], "count": None, "is_title": True})
+    if len(out) < limit:
+        n = limit - len(out)
+        for row in conn.execute(
+            "SELECT DISTINCT u.nickname FROM episode_djs d "
+            "JOIN users u ON u.id=d.user_id "
+            "WHERE u.nickname LIKE ? LIMIT ?",
+            (prefix + "%", n),
+        ):
+            out.append({"keyword": row["nickname"], "count": None, "is_user": True})
     return out
 
 

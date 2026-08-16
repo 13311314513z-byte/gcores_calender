@@ -127,7 +127,7 @@
 <header>
   <h1>📻 机核播客日历</h1>
   <div id="searchBox">
-    <input id="searchInput" placeholder="搜索标题 / 副标题 / 简介 / 分类 / 正文…" autocomplete="off">
+    <input id="searchInput" placeholder="搜索标题 / 副标题 / 简介 / 分类 / 正文 / 参与者…" autocomplete="off">
     <div id="suggest"></div>
   </div>
   <div class="chips">
@@ -361,7 +361,7 @@ $("#searchInput").addEventListener("input", e => {
     if (!data.suggestions.length) { box.style.display = "none"; return; }
     box.innerHTML = data.suggestions.map((s, i) =>
       `<div data-i="${i}">${esc(s.keyword)} <span style="color:var(--dim);font-size:11px">` +
-      (s.is_title ? "（标题）" : `出现${s.count}次`) + `</span></div>`).join("");
+      (s.is_title ? "（标题）" : s.is_user ? "（参与者）" : `出现${s.count}次`) + `</span></div>`).join("");
     box.style.display = "block";
     box.querySelectorAll("div").forEach(d =>
       d.onclick = () => { $("#searchInput").value = d.textContent.split("（")[0].trim(); box.style.display = "none"; doSearch($("#searchInput").value); });

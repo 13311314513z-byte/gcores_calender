@@ -113,6 +113,14 @@ EMBEDDED_LAYER = r"""
 const __D = window.__GCAL_DATA__;
 const __AB = "机核有声书";
 const __IS_AB = e => e.cn === __AB;
+// 参与者昵称索引：期数 id -> "昵称1 昵称2 …"；以及唯一昵称列表
+const __USER_INDEX = {};
+const __NICKS = new Set();
+for (const rid in __D.djs) {
+  let s = "";
+  for (const d of __D.djs[rid]) { s += " " + (d.n || ""); if (d.n) __NICKS.add(d.n); }
+  __USER_INDEX[rid] = s;
+}
 
 function __sortDesc(es) {
   return es.slice().sort((a, b) =>
@@ -181,7 +189,8 @@ async function api(path) {
       (e.t || "").toLowerCase().includes(qq) ||
       (e.s || "").toLowerCase().includes(qq) ||
       (e.pd || "").toLowerCase().includes(qq) ||
-      (e.cn || "").toLowerCase().includes(qq));
+      (e.cn || "").toLowerCase().includes(qq) ||
+      (__USER_INDEX[e.id] || "").toLowerCase().includes(qq));
     return {query: qq, results: __sortDesc(hits).slice(0, limit).map(__card)};
   }
   if (p.endsWith("/api/suggest")) {
@@ -198,6 +207,14 @@ async function api(path) {
         for (const e of __sortDesc(__D.episodes)) {
           if ((e.t || "").toLowerCase().startsWith(pre)) {
             out.push({keyword: e.t, count: null, is_title: true});
+            if (out.length >= 10) break;
+          }
+        }
+      }
+      if (out.length < 10) {
+        for (const n of __NICKS) {
+          if (n.toLowerCase().startsWith(pre)) {
+            out.push({keyword: n, count: null, is_user: true});
             if (out.length >= 10) break;
           }
         }
