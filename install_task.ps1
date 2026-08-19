@@ -1,4 +1,4 @@
-# 安装机核播客日历的 Windows 计划任务（用 Register-ScheduledTask，无需管理员）
+﻿# 安装机核播客日历的 Windows 计划任务（用 Register-ScheduledTask，无需管理员）
 # 用法：powershell -ExecutionPolicy Bypass -File install_task.ps1
 $ErrorActionPreference = "Stop"
 
@@ -45,6 +45,18 @@ New-GcalTask -Name "GcoresCalendarHourly" `
     -Argument ('"' + $gcal + '" incremental') `
     -TriggerFactory { New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) `
         -RepetitionInterval (New-TimeSpan -Hours 6) }
+
+# 3) 登录自启 Web 界面（pythonw 无窗口，独立于会话）
+$webpy = Join-Path $dir "webui.py"
+New-GcalTask -Name "GcoresCalendarWeb" `
+    -Argument ('"' + $webpy + '"') `
+    -TriggerFactory { New-ScheduledTaskTrigger -AtLogOn }
+
+# 4) 每小时看门狗：8333 未监听则自动以独立进程拉起 Web 服务
+New-GcalTask -Name "GcoresCalendarWatchdog" `
+    -Argument ('"' + $gcal + '" ensure-web') `
+    -TriggerFactory { New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) `
+        -RepetitionInterval (New-TimeSpan -Hours 1) }
 
 Write-Host ""
 Write-Host "说明："

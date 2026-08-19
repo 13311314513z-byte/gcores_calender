@@ -16,6 +16,7 @@ import argparse
 import logging
 import sys
 from datetime import datetime
+from pathlib import Path
 
 import config
 import store
@@ -334,6 +335,36 @@ def cmd_channel(args):
             print(ln)
 
 
+def cmd_ensure_web(args):
+    """看门狗：检查 Web 端口，未监听则以分离进程启动（pythonw，独立于会话）。"""
+    import socket
+    import subprocess
+    port = args.port
+    sock = socket.socket()
+    try:
+        sock.bind(("127.0.0.1", port))
+        sock.close()
+        up = False
+    except OSError:
+        up = True
+    if up:
+        print(f"Web 服务已在运行（端口 {port}）")
+        return
+    pyw = Path(sys.executable).with_name("pythonw.exe")
+    if not pyw.exists():
+        pyw = Path(sys.executable)
+    config.ensure_dirs()
+    out = open(config.LOG_DIR / "webui.log", "a", encoding="utf-8")
+    DETACHED = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    p = subprocess.Popen(
+        [str(pyw), str(config.BASE_DIR / "webui.py"), "--port", str(port)],
+        cwd=str(config.BASE_DIR),
+        stdout=out, stderr=out,
+        creationflags=DETACHED, close_fds=True,
+    )
+    print(f"Web 服务已启动（PID {p.pid}，端口 {port}，独立进程）")
+
+
 def cmd_export_h5(args):
     from export_h5 import export_h5
     export_h5(db_path=args.db, out_path=args.out)
@@ -439,6 +470,10 @@ def main(argv=None):
     sp = sub.add_parser("export-h5", help="导出可双击打开的离线 H5 单文件")
     sp.add_argument("--out", default=None, help="输出文件路径")
     sp.set_defaults(fn=cmd_export_h5)
+
+    sp = sub.add_parser("ensure-web", help="看门狗：Web 未监听则以独立进程启动")
+    sp.add_argument("--port", type=int, default=8333)
+    sp.set_defaults(fn=cmd_ensure_web)
 
     sp = sub.add_parser("channel", help="查看频道期数")
     sp.add_argument("id", type=int, help="频道 id")

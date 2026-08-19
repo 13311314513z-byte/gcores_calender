@@ -13,7 +13,7 @@ CONFIG_PATH = BASE_DIR / "config.toml"
 
 # ---- 应用信息 ----
 APP_NAME = "机核播客日历"
-VERSION = "1.4.1"   # 语义化版本：MAJOR 重大重构 / MINOR 新增功能 / PATCH 修复与小调整（见 CHANGELOG.md）
+VERSION = "1.4.2"   # 语义化版本：MAJOR 重大重构 / MINOR 新增功能 / PATCH 修复与小调整（见 CHANGELOG.md）
 
 # ---- 站点 ----
 SITE = "https://www.gcores.com"

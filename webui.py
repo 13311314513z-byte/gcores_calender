@@ -3,6 +3,7 @@
 纯标准库 http.server，无第三方依赖。"""
 import json
 import logging
+import sys
 import threading
 import time
 import urllib.parse
@@ -286,6 +287,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def run_server(port=8333, host="127.0.0.1", db=None):
+    # pythonw（无控制台）下 sys.stdout 为 None，替换为内存流防崩溃
+    if sys.stdout is None:
+        sys.stdout = __import__("io").StringIO()
     srv = CalendarServer((host, port), Handler)
     srv.db_path = db or config.DB_PATH
     print(f"机核播客日历 Web 界面: http://{host}:{port}  (Ctrl+C 退出)")

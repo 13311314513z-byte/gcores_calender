@@ -1,6 +1,6 @@
 # 机核播客日历（Gcores Podcast Calendar）
 
-> **当前版本：v1.4.1** ｜ 版本历史见 [CHANGELOG.md](CHANGELOG.md) ｜ 语义化版本规则：MAJOR 不兼容重构 / MINOR 新增功能 / PATCH 缺陷修复
+> **当前版本：v1.4.2** ｜ 版本历史见 [CHANGELOG.md](CHANGELOG.md) ｜ 语义化版本规则：MAJOR 不兼容重构 / MINOR 新增功能 / PATCH 缺陷修复
 
 本地索引 www.gcores.com 全部官方播客（含付费/会员节目元数据），生成按日期检索的日历：
 **"历史上的今天"、关键词检索与提示、参与者名单、每期高权重精华评论前三、封面头图、白天/夜间主题、离线 H5 单文件**。
@@ -61,6 +61,7 @@ py gcal.py serve                    # 启动 Web 界面（默认 127.0.0.1:8333�
 ### 5. 定时抓取与数据守护（Windows 计划任务）
 - 每日 **12:00** 执行**"一条龙"**（`py gcal.py daily`）：① 数据库备份（保留 7 份，`data/backups/`）→ ② 增量抓取 → ③ 播放量快照（热榜数据源）→ ④ 数据完整性自检（逐分类比对 API 计数，不一致告警）
 - 每 6 小时轻量增量（`install_task.ps1` 一键安装，无需管理员；pythonw 无窗口运行）
+- **Web 服务保活**：`py gcal.py ensure-web` 看门狗（检测 8333 未监听则以独立进程拉起）；计划任务 `GcoresCalendarWatchdog` 每小时自动检测重启；`GcoresCalendarWeb` 登录自启（需管理员创建）
 - 日志自动轮转（5MB × 5 份）；SQLite 连接统一 `busy_timeout=10s`，多任务并发安全
 
 ---
@@ -156,6 +157,7 @@ py gcal.py stats                   # 索引统计（含版本）
 
 # —— 服务与导出 ——
 py gcal.py serve                   # 启动 Web 界面（--port --host --db）
+py gcal.py ensure-web              # 看门狗：Web 未监听则以独立进程启动（供计划任务调用）
 py gcal.py export-h5               # 导出离线 H5 单文件（机核播客日历.html）
 py gcal.py --version               # 版本号
 py gcal.py --all day 04-23         # 全局选项：包含非官方（机组用户）内容

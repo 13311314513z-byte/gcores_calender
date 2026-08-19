@@ -11,6 +11,16 @@
 
 ---
 
+## 1.4.2（2026-08-20）
+
+### Web 服务保活（修复 + 新能力）
+- 修复 webui.py 缺少 `import sys` 导致 pythonw 独立启动崩溃
+- 新增 `py gcal.py ensure-web` 看门狗：检测 8333 端口，未监听则以**独立进程**（pythonw，DETACHED）拉起 Web 服务，不再依赖会话/后台任务存活
+- 计划任务新增 `GcoresCalendarWatchdog`（每小时自动检测并重启 Web 服务，实测 Result=0）
+- `install_task.ps1` 增加登录自启 Web 任务（AtLogOn，需管理员权限创建，普通权限下跳过由看门狗兜底）
+
+---
+
 ## 1.4.1（2026-08-16）
 
 ### 修复
